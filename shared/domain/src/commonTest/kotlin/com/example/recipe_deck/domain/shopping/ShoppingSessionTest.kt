@@ -34,8 +34,7 @@ class ShoppingSessionTest {
         items = persistentListOf(*items),
     )
 
-    private fun requires(sessionItem: SessionItem, rowId: String = "row-1") = SessionRecipeItem(
-        id = SessionRecipeItemId(rowId),
+    private fun requires(sessionItem: SessionItem) = SessionRecipeItem(
         sessionItemId = sessionItem.id,
         amount = Amount(quantityOrFail(1), QuantityNotation.FRACTION, AmountUnit.PIECE),
         isExcluded = false,
@@ -136,14 +135,5 @@ class ShoppingSessionTest {
         val excluded = requires(greenOnion).copy(isExcluded = true)
 
         assertEquals(persistentListOf(greenOnion), session(recipes = persistentListOf(mapoTofu(excluded)), items = persistentListOf(greenOnion)).items)
-    }
-
-    @Test
-    fun 別々のSessionRecipeにまたがっても同じ材料行IDを重複して持てない() {
-        val friedRice = mapoTofu(requires(greenOnion, "row-1")).copy(id = SessionRecipeId("session-fried-rice"))
-
-        assertFailsWith<IllegalArgumentException> {
-            session(recipes = persistentListOf(mapoTofu(requires(greenOnion, "row-1")), friedRice), items = persistentListOf(greenOnion))
-        }
     }
 }

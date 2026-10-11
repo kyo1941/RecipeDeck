@@ -10,7 +10,6 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class RecipeTest {
     private val greenOnion = ItemId("green-onion")
@@ -34,20 +33,10 @@ class RecipeTest {
     @Test
     fun 同じItemを複数の材料行に持てる() {
         val ingredients = persistentListOf(
-            RecipeIngredient(RecipeIngredientId("row-1"), greenOnion, Amount(quantityOrFail(1, 2), QuantityNotation.FRACTION, AmountUnit.PIECE)),
-            RecipeIngredient(RecipeIngredientId("row-2"), greenOnion, null),
+            RecipeIngredient(greenOnion, Amount(quantityOrFail(1, 2), QuantityNotation.FRACTION, AmountUnit.PIECE)),
+            RecipeIngredient(greenOnion, null),
         )
 
         assertEquals(ingredients, recipe(ingredients = ingredients).ingredients)
-    }
-
-    @Test
-    fun 同じ材料行IDを重複して持てない() {
-        val ingredients = persistentListOf(
-            RecipeIngredient(RecipeIngredientId("row-1"), greenOnion, null),
-            RecipeIngredient(RecipeIngredientId("row-1"), ItemId("tofu"), null),
-        )
-
-        assertFailsWith<IllegalArgumentException> { recipe(ingredients = ingredients) }
     }
 }

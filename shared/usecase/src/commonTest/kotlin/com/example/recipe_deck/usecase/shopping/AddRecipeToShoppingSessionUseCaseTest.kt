@@ -13,7 +13,6 @@ import com.example.recipe_deck.domain.item.ItemRepositoryFailure
 import com.example.recipe_deck.domain.recipe.Recipe
 import com.example.recipe_deck.domain.recipe.RecipeId
 import com.example.recipe_deck.domain.recipe.RecipeIngredient
-import com.example.recipe_deck.domain.recipe.RecipeIngredientId
 import com.example.recipe_deck.domain.recipe.RecipeRepositoryFailure
 import com.example.recipe_deck.domain.recipe.RecipeStatus
 import com.example.recipe_deck.domain.shopping.SessionState
@@ -57,7 +56,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
         photoRef = null,
         memo = null,
         ingredients = persistentListOf(
-            RecipeIngredient(RecipeIngredientId("ingredient-1"), tofu.id, amount = null),
+            RecipeIngredient(tofu.id, amount = null),
         ),
     )
 

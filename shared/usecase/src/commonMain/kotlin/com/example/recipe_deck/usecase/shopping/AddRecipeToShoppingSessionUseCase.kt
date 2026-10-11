@@ -18,7 +18,6 @@ import com.example.recipe_deck.domain.shopping.SessionItemId
 import com.example.recipe_deck.domain.shopping.SessionRecipe
 import com.example.recipe_deck.domain.shopping.SessionRecipeId
 import com.example.recipe_deck.domain.shopping.SessionRecipeItem
-import com.example.recipe_deck.domain.shopping.SessionRecipeItemId
 import com.example.recipe_deck.domain.shopping.SessionState
 import com.example.recipe_deck.domain.shopping.ShoppingSession
 import com.example.recipe_deck.domain.shopping.ShoppingSessionId
@@ -83,7 +82,6 @@ class AddRecipeToShoppingSessionUseCase(
                 SessionItem(SessionItemId(Uuid.random().toString()), item, manualAddition = null)
             }
             SessionRecipeItem(
-                id = SessionRecipeItemId(Uuid.random().toString()),
                 sessionItemId = sessionItem.id,
                 amount = input.ingredient.amount,
                 isExcluded = input.isExcluded,

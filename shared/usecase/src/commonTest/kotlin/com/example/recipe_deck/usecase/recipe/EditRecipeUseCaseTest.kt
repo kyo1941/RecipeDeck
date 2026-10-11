@@ -10,7 +10,6 @@ import com.example.recipe_deck.domain.item.ItemRepositoryFailure
 import com.example.recipe_deck.domain.recipe.Recipe
 import com.example.recipe_deck.domain.recipe.RecipeId
 import com.example.recipe_deck.domain.recipe.RecipeIngredient
-import com.example.recipe_deck.domain.recipe.RecipeIngredientId
 import com.example.recipe_deck.domain.recipe.RecipeRepositoryFailure
 import com.example.recipe_deck.domain.recipe.RecipeStatus
 import com.example.recipe_deck.usecase.FakeTransactionRunner
@@ -42,7 +41,7 @@ class EditRecipeUseCaseTest {
         photoRef = "photo-1",
         memo = null,
         ingredients = persistentListOf(
-            RecipeIngredient(id = RecipeIngredientId("ingredient-1"), itemId = groundMeat.id, amount = null),
+            RecipeIngredient(itemId = groundMeat.id, amount = null),
         ),
     )
 

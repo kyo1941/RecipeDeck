@@ -7,7 +7,6 @@ import com.example.recipe_deck.domain.item.Item
 import com.example.recipe_deck.domain.item.ItemId
 import com.example.recipe_deck.domain.item.ItemReference
 import com.example.recipe_deck.domain.recipe.RecipeIngredient
-import com.example.recipe_deck.domain.recipe.RecipeIngredientId
 import com.example.recipe_deck.usecase.ingredient.IngredientInput
 import com.example.recipe_deck.usecase.ingredient.ItemInput
 import com.example.recipe_deck.usecase.item.linkToExistingItem
@@ -46,7 +45,6 @@ internal fun resolveIngredients(
             }
         }
         RecipeIngredient(
-            id = RecipeIngredientId(Uuid.random().toString()),
             itemId = itemId,
             amount = input.amount,
         )

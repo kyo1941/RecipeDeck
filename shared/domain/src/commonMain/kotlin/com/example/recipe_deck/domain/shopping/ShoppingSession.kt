@@ -22,7 +22,6 @@ data class ShoppingSession(
         require(items.distinctBy { it.item }.size == items.size) { "同じ Item か同じ表示名の SessionItem が複数ある" }
 
         val recipeItems = recipes.flatMap { it.items }
-        require(recipeItems.distinctBy { it.id }.size == recipeItems.size) { "同じ材料行が Session に重複している" }
 
         val sessionItemIds = items.map { it.id }.toSet()
         val referencedSessionItemIds = recipeItems.map { it.sessionItemId }.toSet()
