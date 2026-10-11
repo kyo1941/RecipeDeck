@@ -10,8 +10,4 @@ data class Recipe(
     val photoRef: String?,
     val memo: NotBlankString?,
     val ingredients: ImmutableList<RecipeIngredient>,
-) {
-    init {
-        require(ingredients.distinctBy { it.id }.size == ingredients.size) { "同じ材料行が Recipe に重複している" }
-    }
-}
+)

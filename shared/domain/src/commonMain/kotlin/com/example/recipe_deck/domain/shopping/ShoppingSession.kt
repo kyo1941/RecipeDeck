@@ -2,33 +2,60 @@
 
 package com.example.recipe_deck.domain.shopping
 
+import com.example.recipe_deck.domain.NotBlankString
+import com.example.recipe_deck.domain.amount.Multiplier
+import com.example.recipe_deck.domain.recipe.RecipeId
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
-data class ShoppingSession(
+@ConsistentCopyVisibility
+data class ShoppingSession private constructor(
     val id: ShoppingSessionId,
     val state: SessionState,
     val createdAt: Instant,
     val recipes: ImmutableList<SessionRecipe>,
     val items: ImmutableList<SessionItem>,
 ) {
-    init {
-        if (state is SessionState.Completed) {
-            require(state.completedAt >= createdAt) { "完了日時が作成日時より前になっている" }
+    fun withAddedRecipe(
+        sourceRecipeId: RecipeId,
+        recipeName: NotBlankString,
+        multiplier: Multiplier,
+        ingredients: List<AddedRecipeIngredient>,
+    ): ShoppingSession {
+        val sessionItems = items.associateByTo(mutableMapOf()) { it.item }
+        val recipeIngredients = ingredients.map { ingredient ->
+            val sessionItem = sessionItems.getOrPut(ingredient.item) {
+                SessionItem(SessionItemId.generate(), ingredient.item, manualAddition = null)
+            }
+            SessionRecipeIngredient(
+                sessionItemId = sessionItem.id,
+                amount = ingredient.amount,
+                isExcluded = ingredient.isExcluded,
+            )
         }
-        require(recipes.distinctBy { it.id }.size == recipes.size) { "同じ SessionRecipe が重複している" }
-        require(items.distinctBy { it.id }.size == items.size) { "同じ SessionItem が重複している" }
-        require(items.distinctBy { it.item }.size == items.size) { "同じ Item か同じ表示名の SessionItem が複数ある" }
+        val sessionRecipe = SessionRecipe(
+            id = SessionRecipeId.generate(),
+            sourceRecipeId = sourceRecipeId,
+            recipeName = recipeName,
+            multiplier = multiplier,
+            ingredients = recipeIngredients.toImmutableList(),
+        )
+        return copy(
+            recipes = (recipes + sessionRecipe).toImmutableList(),
+            items = sessionItems.values.toImmutableList(),
+        )
+    }
 
-        val recipeItems = recipes.flatMap { it.items }
-        require(recipeItems.distinctBy { it.id }.size == recipeItems.size) { "同じ材料行が Session に重複している" }
-
-        val sessionItemIds = items.map { it.id }.toSet()
-        val referencedSessionItemIds = recipeItems.map { it.sessionItemId }.toSet()
-        require(sessionItemIds.containsAll(referencedSessionItemIds)) { "Session に無い SessionItem を参照している" }
-        require(items.all { it.manualAddition != null || it.id in referencedSessionItemIds }) {
-            "Recipe 由来でも手動追加でもない SessionItem がある"
-        }
+    companion object {
+        fun create(createdAt: Instant): ShoppingSession = ShoppingSession(
+            id = ShoppingSessionId.generate(),
+            state = SessionState.Active,
+            createdAt = createdAt,
+            recipes = persistentListOf(),
+            items = persistentListOf(),
+        )
     }
 }

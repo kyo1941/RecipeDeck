@@ -44,11 +44,11 @@ MVP ではユーザー自身が所有する Recipe を前提とし、公開・�
 | ShoppingSession | `ShoppingSession` | 「今回の買い物」 |
 | 進行中／完了 | `SessionState.Active` / `Completed` | ShoppingSession の状態 |
 | Session 内の Recipe | `SessionRecipe` | Session に追加した Recipe のコピー |
-| Session 内の材料 | `SessionRecipeItem` | Session 内の Recipe が、ある Item をどれだけ必要とするか |
+| Session 内の材料 | `SessionRecipeIngredient` | Session 内の Recipe が、ある Item をどれだけ必要とするか |
 | Session 内の Item | `SessionItem` | Session 内の品目1つ（買い物リストの1行の元）。Item か Session 限定の品目を指す |
 | Session 限定の品目 | `ItemReference.Unregistered`（`SessionItem` 内） | Item を作らず、Session の中にだけ表示名を持つ品目。Session と同じ寿命を持つ |
 | 手動追加 | `ManualAddition` | Recipe を経由せず Session に直接追加した項目 |
-| 今回は不要 | `SessionRecipeItem.isExcluded` | Recipe 本体は変更せず、今回に限り材料を除外すること |
+| 今回は不要 | `SessionRecipeIngredient.isExcluded` | Recipe 本体は変更せず、今回に限り材料を除外すること |
 
 ## Recipe
 
@@ -92,7 +92,7 @@ Recipe や ShoppingSession に所属しない、**買い物対象の同一性**�
 ## 分量
 
 数量と入力形式と単位の組です。
-材料（RecipeIngredient）と Session 内の材料（SessionRecipeItem）が持ちます。
+材料（RecipeIngredient）と Session 内の材料（SessionRecipeIngredient）が持ちます。
 
 確定事項：
 
@@ -181,8 +181,8 @@ Recipe を Session へ追加するとき、Session 側へ必要な情報をコ�
 
 ```mermaid
 flowchart LR
-    A["SessionRecipeItem<br>麻婆豆腐: 長ネギ 1/2個"] --> C["SessionItem: 長ネギ"]
-    B["SessionRecipeItem<br>味噌汁: 長ネギ 1/3個"] --> C
+    A["SessionRecipeIngredient<br>麻婆豆腐: 長ネギ 1/2個"] --> C["SessionItem: 長ネギ"]
+    B["SessionRecipeIngredient<br>味噌汁: 長ネギ 1/3個"] --> C
     C --> D["Application/UI projection<br>長ネギ 5/6個"]
 ```
 
@@ -288,6 +288,7 @@ AI の応答が遅い場合や利用しない場合は、該当 UseCase への�
 - 数量に 0 が入力されたときの扱い（分量なしとみなすか、不正とするか）
 - パック・袋など容器を数える単位の扱い。同一の Item で「1個」と「1パック」が混在する場合、単純に「個」へ統一すると誤って合算されてしまう問題がある。合算時の表現方法と合わせて方針を決定する
 - 空の Session を有効な状態とするか。Recipe の追加では空の Session は生まれない。「買い物リストの作成」のように Session を先に作る操作を設けるかは、その画面を作るときに決める
+  - `ShoppingSession.create` は空の Session を返すが、今は Recipe の追加で `withAddedRecipe` と組み合わせてだけ使い、空のまま保存する操作はない。`create` があることは、空の Session を有効とする決定ではない
 - 追加した後に、Session 内の Recipe を単位として材料を編集できるようにするか。除外した材料を後から有効に戻せるようにするかも合わせて決める
 - 買い物リスト上で品目単位に数量を変える・削除するとき、その品目が複数の材料の行から合算されていたら、どの行をどう変えるか。今のドメインには、合算した後の品目単位の変更を表す場所がない。リストの編集を作るときに決める
 - Session 限定の品目を Item として登録できるようにするか。今は Item にしない。設ける場合は、ユーザーに Item として登録するかを尋ねる導線とし、登録しない選択肢も残す。登録したときは、その SessionItem の参照を登録した Item に付け替えれば、Session 内の材料の行はそのまま使える

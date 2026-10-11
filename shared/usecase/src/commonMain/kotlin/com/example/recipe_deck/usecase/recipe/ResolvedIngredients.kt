@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalUuidApi::class)
-
 package com.example.recipe_deck.usecase.recipe
 
 import com.example.recipe_deck.domain.NotBlankString
@@ -7,14 +5,11 @@ import com.example.recipe_deck.domain.item.Item
 import com.example.recipe_deck.domain.item.ItemId
 import com.example.recipe_deck.domain.item.ItemReference
 import com.example.recipe_deck.domain.recipe.RecipeIngredient
-import com.example.recipe_deck.domain.recipe.RecipeIngredientId
 import com.example.recipe_deck.usecase.ingredient.IngredientInput
 import com.example.recipe_deck.usecase.ingredient.ItemInput
 import com.example.recipe_deck.usecase.item.linkToExistingItem
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 internal data class ResolvedIngredients(
     val recipeIngredients: ImmutableList<RecipeIngredient>,
@@ -40,13 +35,12 @@ internal fun resolveIngredients(
                         linked.itemId
                     }
                     is ItemReference.Unregistered -> newItems
-                        .getOrPut(linked.displayName) { Item(ItemId(Uuid.random().toString()), linked.displayName) }
+                        .getOrPut(linked.displayName) { Item(ItemId.generate(), linked.displayName) }
                         .id
                 }
             }
         }
         RecipeIngredient(
-            id = RecipeIngredientId(Uuid.random().toString()),
             itemId = itemId,
             amount = input.amount,
         )
