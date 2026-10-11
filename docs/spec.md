@@ -44,11 +44,11 @@ MVP ではユーザー自身が所有する Recipe を前提とし、公開・�
 | ShoppingSession | `ShoppingSession` | 「今回の買い物」 |
 | 進行中／完了 | `SessionState.Active` / `Completed` | ShoppingSession の状態 |
 | Session 内の Recipe | `SessionRecipe` | Session に追加した Recipe のコピー |
-| Session 内の材料 | `SessionRecipeItem` | Session 内の Recipe が、ある Item をどれだけ必要とするか |
+| Session 内の材料 | `SessionRecipeIngredient` | Session 内の Recipe が、ある Item をどれだけ必要とするか |
 | Session 内の Item | `SessionItem` | Session 内の品目1つ（買い物リストの1行の元）。Item か Session 限定の品目を指す |
 | Session 限定の品目 | `ItemReference.Unregistered`（`SessionItem` 内） | Item を作らず、Session の中にだけ表示名を持つ品目。Session と同じ寿命を持つ |
 | 手動追加 | `ManualAddition` | Recipe を経由せず Session に直接追加した項目 |
-| 今回は不要 | `SessionRecipeItem.isExcluded` | Recipe 本体は変更せず、今回に限り材料を除外すること |
+| 今回は不要 | `SessionRecipeIngredient.isExcluded` | Recipe 本体は変更せず、今回に限り材料を除外すること |
 
 ## Recipe
 
@@ -92,7 +92,7 @@ Recipe や ShoppingSession に所属しない、**買い物対象の同一性**�
 ## 分量
 
 数量と入力形式と単位の組です。
-材料（RecipeIngredient）と Session 内の材料（SessionRecipeItem）が持ちます。
+材料（RecipeIngredient）と Session 内の材料（SessionRecipeIngredient）が持ちます。
 
 確定事項：
 
@@ -181,8 +181,8 @@ Recipe を Session へ追加するとき、Session 側へ必要な情報をコ�
 
 ```mermaid
 flowchart LR
-    A["SessionRecipeItem<br>麻婆豆腐: 長ネギ 1/2個"] --> C["SessionItem: 長ネギ"]
-    B["SessionRecipeItem<br>味噌汁: 長ネギ 1/3個"] --> C
+    A["SessionRecipeIngredient<br>麻婆豆腐: 長ネギ 1/2個"] --> C["SessionItem: 長ネギ"]
+    B["SessionRecipeIngredient<br>味噌汁: 長ネギ 1/3個"] --> C
     C --> D["Application/UI projection<br>長ネギ 5/6個"]
 ```
 
