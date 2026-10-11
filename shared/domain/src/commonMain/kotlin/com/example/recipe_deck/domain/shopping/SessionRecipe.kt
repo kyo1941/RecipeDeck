@@ -10,5 +10,5 @@ data class SessionRecipe(
     val sourceRecipeId: RecipeId,
     val recipeName: NotBlankString,
     val multiplier: Multiplier,
-    val items: ImmutableList<SessionRecipeItem>,
+    val ingredients: ImmutableList<SessionRecipeIngredient>,
 )

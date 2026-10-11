@@ -13,7 +13,7 @@ import com.example.recipe_deck.domain.recipe.RecipeId
 import com.example.recipe_deck.domain.recipe.RecipeRepository
 import com.example.recipe_deck.domain.recipe.RecipeRepositoryFailure
 import com.example.recipe_deck.domain.recipe.RecipeStatus
-import com.example.recipe_deck.domain.shopping.SessionRecipeRow
+import com.example.recipe_deck.domain.shopping.AddedRecipeIngredient
 import com.example.recipe_deck.domain.shopping.ShoppingSession
 import com.example.recipe_deck.domain.shopping.ShoppingSessionRepository
 import com.example.recipe_deck.domain.shopping.ShoppingSessionRepositoryFailure
@@ -58,7 +58,7 @@ class AddRecipeToShoppingSessionUseCase(
         }
 
         val matchedExistingItems = mutableSetOf<Item>()
-        val rows = ingredients.mapNotNull { input ->
+        val addedIngredients = ingredients.mapNotNull { input ->
             val item = when (val inputItem = input.ingredient.item) {
                 is ItemInput.Selected -> ItemReference.Registered(inputItem.itemId)
                 is ItemInput.Typed -> {
@@ -68,10 +68,10 @@ class AddRecipeToShoppingSessionUseCase(
                     }
                 }
             }
-            SessionRecipeRow(item, input.ingredient.amount, input.isExcluded)
+            AddedRecipeIngredient(item, input.ingredient.amount, input.isExcluded)
         }
-        val updatedSession = session.withAddedRecipe(recipe.id, recipe.name, multiplier, rows)
 
+        val updatedSession = session.withAddedRecipe(recipe.id, recipe.name, multiplier, addedIngredients)
         return when (val saved = shoppingSessionRepository.save(updatedSession)) {
             is Outcome.Success -> AddRecipeToShoppingSessionResult.Added(matchedExistingItems.toImmutableList())
             is Outcome.Failure -> saved.error.toAddRecipeToShoppingSessionResult()

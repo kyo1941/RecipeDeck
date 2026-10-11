@@ -1,9 +1,10 @@
 package com.example.recipe_deck.domain.shopping
 
 import com.example.recipe_deck.domain.amount.Amount
+import com.example.recipe_deck.domain.item.ItemReference
 
-data class SessionRecipeItem(
-    val sessionItemId: SessionItemId,
+data class AddedRecipeIngredient(
+    val item: ItemReference,
     val amount: Amount?,
     val isExcluded: Boolean,
 )

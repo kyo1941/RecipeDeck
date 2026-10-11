@@ -23,17 +23,17 @@ data class ShoppingSession private constructor(
         sourceRecipeId: RecipeId,
         recipeName: NotBlankString,
         multiplier: Multiplier,
-        rows: List<SessionRecipeRow>,
+        ingredients: List<AddedRecipeIngredient>,
     ): ShoppingSession {
         val sessionItems = items.associateByTo(mutableMapOf()) { it.item }
-        val recipeItems = rows.map { row ->
-            val sessionItem = sessionItems.getOrPut(row.item) {
-                SessionItem(SessionItemId.generate(), row.item, manualAddition = null)
+        val recipeIngredients = ingredients.map { ingredient ->
+            val sessionItem = sessionItems.getOrPut(ingredient.item) {
+                SessionItem(SessionItemId.generate(), ingredient.item, manualAddition = null)
             }
-            SessionRecipeItem(
+            SessionRecipeIngredient(
                 sessionItemId = sessionItem.id,
-                amount = row.amount,
-                isExcluded = row.isExcluded,
+                amount = ingredient.amount,
+                isExcluded = ingredient.isExcluded,
             )
         }
         val sessionRecipe = SessionRecipe(
@@ -41,7 +41,7 @@ data class ShoppingSession private constructor(
             sourceRecipeId = sourceRecipeId,
             recipeName = recipeName,
             multiplier = multiplier,
-            items = recipeItems.toImmutableList(),
+            ingredients = recipeIngredients.toImmutableList(),
         )
         return copy(
             recipes = (recipes + sessionRecipe).toImmutableList(),

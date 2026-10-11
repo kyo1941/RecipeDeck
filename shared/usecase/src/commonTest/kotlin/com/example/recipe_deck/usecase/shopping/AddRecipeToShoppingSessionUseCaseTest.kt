@@ -88,7 +88,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
         assertEquals(ItemReference.Registered(tofu.id), saved.items.single().item)
         assertEquals(
             Amount(quantityOrFail(1, 2), QuantityNotation.FRACTION, AmountUnit.PIECE),
-            sessionRecipe.items.single().amount,
+            sessionRecipe.ingredients.single().amount,
         )
     }
 
@@ -115,7 +115,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
         val saved = shoppingSessionRepository.savedSessions.last()
         val sessionItem = saved.items.single()
         assertEquals(listOf(multiplierOrFail(1), multiplierOrFail(1, 2)), saved.recipes.map { it.multiplier })
-        assertEquals(listOf(sessionItem.id, sessionItem.id), saved.recipes.map { it.items.single().sessionItemId })
+        assertEquals(listOf(sessionItem.id, sessionItem.id), saved.recipes.map { it.ingredients.single().sessionItemId })
     }
 
     @Test
@@ -131,8 +131,8 @@ class AddRecipeToShoppingSessionUseCaseTest {
             ),
         )
 
-        val recipeItems = shoppingSessionRepository.savedSessions.single().recipes.single().items
-        assertEquals(listOf(false, true), recipeItems.map { it.isExcluded })
+        val recipeIngredients = shoppingSessionRepository.savedSessions.single().recipes.single().ingredients
+        assertEquals(listOf(false, true), recipeIngredients.map { it.isExcluded })
     }
 
     @Test
@@ -196,7 +196,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
             ingredients = listOf(ingredient(ItemInput.Typed(" ")), ingredient(ItemInput.Selected(tofu.id))),
         )
 
-        assertEquals(1, shoppingSessionRepository.savedSessions.single().recipes.single().items.size)
+        assertEquals(1, shoppingSessionRepository.savedSessions.single().recipes.single().ingredients.size)
     }
 
     @Test
@@ -206,7 +206,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
         val result = addRecipe(mapoTofu.id, multiplierOrFail(1), emptyList())
 
         assertEquals(AddRecipeToShoppingSessionResult.Added(persistentListOf()), result)
-        assertEquals(emptyList(), shoppingSessionRepository.savedSessions.single().recipes.single().items)
+        assertEquals(emptyList(), shoppingSessionRepository.savedSessions.single().recipes.single().ingredients)
     }
 
     @Test
