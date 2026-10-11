@@ -9,6 +9,7 @@ import com.example.recipe_deck.domain.amount.multiplierOrFail
 import com.example.recipe_deck.domain.amount.quantityOrFail
 import com.example.recipe_deck.domain.item.ItemId
 import com.example.recipe_deck.domain.item.ItemReference
+import com.example.recipe_deck.domain.notBlankStringOrFail
 import com.example.recipe_deck.domain.recipe.RecipeId
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -28,7 +29,7 @@ class ShoppingSessionTest {
     private fun mapoTofu(vararg items: SessionRecipeItem) = SessionRecipe(
         id = SessionRecipeId("session-mapo-tofu"),
         sourceRecipeId = RecipeId("mapo-tofu"),
-        recipeName = "麻婆豆腐",
+        recipeName = notBlankStringOrFail("麻婆豆腐"),
         multiplier = multiplierOrFail(2),
         items = persistentListOf(*items),
     )
@@ -90,26 +91,19 @@ class ShoppingSessionTest {
 
     @Test
     fun Session限定の品目をSessionItemとして持てる() {
-        val doubanjiang = SessionItem(SessionItemId("session-doubanjiang"), ItemReference.Unregistered("豆板醤"), manualAddition = null)
+        val doubanjiang = SessionItem(SessionItemId("session-doubanjiang"), ItemReference.Unregistered(notBlankStringOrFail("豆板醤")), manualAddition = null)
 
         val session = session(recipes = persistentListOf(mapoTofu(requires(doubanjiang))), items = persistentListOf(doubanjiang))
 
-        assertEquals(ItemReference.Unregistered("豆板醤"), session.items.single().item)
+        assertEquals(ItemReference.Unregistered(notBlankStringOrFail("豆板醤")), session.items.single().item)
     }
 
     @Test
     fun 同じ表示名のSession限定の品目を複数持てない() {
-        val doubanjiang = SessionItem(SessionItemId("session-doubanjiang"), ItemReference.Unregistered("豆板醤"), ManualAddition(amount = null))
+        val doubanjiang = SessionItem(SessionItemId("session-doubanjiang"), ItemReference.Unregistered(notBlankStringOrFail("豆板醤")), ManualAddition(amount = null))
         val duplicated = doubanjiang.copy(id = SessionItemId("session-doubanjiang-2"))
 
         assertFailsWith<IllegalArgumentException> { session(items = persistentListOf(doubanjiang, duplicated)) }
-    }
-
-    @Test
-    fun 表示名が空白だけのSession限定の品目は作れない() {
-        assertFailsWith<IllegalArgumentException> {
-            SessionItem(SessionItemId("session-blank"), ItemReference.Unregistered(" "), ManualAddition(amount = null))
-        }
     }
 
     @Test
@@ -142,11 +136,6 @@ class ShoppingSessionTest {
         val excluded = requires(greenOnion).copy(isExcluded = true)
 
         assertEquals(persistentListOf(greenOnion), session(recipes = persistentListOf(mapoTofu(excluded)), items = persistentListOf(greenOnion)).items)
-    }
-
-    @Test
-    fun Recipe名が空白だけのSessionRecipeは作れない() {
-        assertFailsWith<IllegalArgumentException> { mapoTofu().copy(recipeName = " ") }
     }
 
     @Test

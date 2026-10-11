@@ -1,10 +1,8 @@
 package com.example.recipe_deck.domain.item
 
+import com.example.recipe_deck.domain.NotBlankString
+
 data class Item(
     val id: ItemId,
-    val displayName: String,
-) {
-    init {
-        require(displayName.isNotBlank()) { "Item の表示名は空白だけにできない" }
-    }
-}
+    val displayName: NotBlankString,
+)

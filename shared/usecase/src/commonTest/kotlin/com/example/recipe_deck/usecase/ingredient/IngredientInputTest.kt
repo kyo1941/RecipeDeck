@@ -4,7 +4,6 @@ import com.example.recipe_deck.domain.amount.AmountUnit
 import com.example.recipe_deck.domain.amount.Quantity
 import com.example.recipe_deck.domain.amount.QuantityNotation
 import com.example.recipe_deck.domain.item.ItemId
-import com.example.recipe_deck.domain.item.ItemReference
 import com.example.recipe_deck.usecase.quantityOrFail
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -12,39 +11,33 @@ import kotlin.test.assertTrue
 
 class IngredientInputTest {
     private fun ingredient(
-        item: ItemReference,
+        item: ItemInput,
         quantity: Quantity? = null,
         unit: AmountUnit? = null,
     ) = IngredientInput(item, quantity, QuantityNotation.FRACTION, unit)
 
     @Test
-    fun 表示名も分量もなければ無視してよい材料になる() {
-        assertTrue(ingredient(ItemReference.Unregistered(" 　")).isIgnorable)
-    }
-
-    @Test
-    fun 表示名がなく単位だけなら無視してよい材料になる() {
-        assertTrue(ingredient(ItemReference.Unregistered(""), unit = AmountUnit.GRAM).isIgnorable)
-    }
-
-    @Test
     fun 表示名がなく数量があれば不正な材料になる() {
-        val input = ingredient(ItemReference.Unregistered(" "), quantityOrFail(1), AmountUnit.PIECE)
-
-        assertTrue(input.isInvalid)
-        assertFalse(input.isIgnorable)
+        assertTrue(ingredient(ItemInput.Typed(" "), quantityOrFail(1), AmountUnit.PIECE).isInvalid)
     }
 
     @Test
-    fun 表示名があれば分量がなくても無視してよい材料でも不正な材料でもない() {
-        val input = ingredient(ItemReference.Unregistered("長ネギ"))
-
-        assertFalse(input.isIgnorable)
-        assertFalse(input.isInvalid)
+    fun 表示名も分量もなければ不正な材料にならない() {
+        assertFalse(ingredient(ItemInput.Typed(" 　")).isInvalid)
     }
 
     @Test
-    fun 既存のItemを選んでいれば分量がなくても無視してよい材料にならない() {
-        assertFalse(ingredient(ItemReference.Registered(ItemId("item-1"))).isIgnorable)
+    fun 表示名がなく単位だけなら不正な材料にならない() {
+        assertFalse(ingredient(ItemInput.Typed(""), unit = AmountUnit.GRAM).isInvalid)
+    }
+
+    @Test
+    fun 表示名があれば分量がなくても不正な材料にならない() {
+        assertFalse(ingredient(ItemInput.Typed("長ネギ")).isInvalid)
+    }
+
+    @Test
+    fun 既存のItemを選んでいれば分量がなくても不正な材料にならない() {
+        assertFalse(ingredient(ItemInput.Selected(ItemId("item-1"))).isInvalid)
     }
 }

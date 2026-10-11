@@ -1,5 +1,6 @@
 package com.example.recipe_deck.usecase.recipe
 
+import com.example.recipe_deck.domain.NotBlankString
 import com.example.recipe_deck.domain.Outcome
 import com.example.recipe_deck.domain.TransactionRunner
 import com.example.recipe_deck.domain.item.Item
@@ -25,7 +26,7 @@ class EditRecipeUseCase(
         memo: String,
         ingredients: List<IngredientInput>,
     ): EditRecipeResult {
-        val trimmedName = name.trim().ifEmpty { return EditRecipeResult.NameRequired }
+        val recipeName = NotBlankString.of(name) ?: return EditRecipeResult.NameRequired
 
         ingredients.indices
             .filter { ingredients[it].isInvalid }
@@ -53,9 +54,9 @@ class EditRecipeUseCase(
             }
 
             val editedRecipe = recipe.copy(
-                name = trimmedName,
+                name = recipeName,
                 status = status,
-                memo = memo.trim().ifEmpty { null },
+                memo = NotBlankString.of(memo),
                 ingredients = resolved.recipeIngredients,
             )
             when (val saved = recipeRepository.save(editedRecipe)) {

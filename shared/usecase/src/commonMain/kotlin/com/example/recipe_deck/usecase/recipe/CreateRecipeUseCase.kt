@@ -2,6 +2,7 @@
 
 package com.example.recipe_deck.usecase.recipe
 
+import com.example.recipe_deck.domain.NotBlankString
 import com.example.recipe_deck.domain.Outcome
 import com.example.recipe_deck.domain.TransactionRunner
 import com.example.recipe_deck.domain.item.Item
@@ -28,7 +29,7 @@ class CreateRecipeUseCase(
         status: RecipeStatus,
         ingredients: List<IngredientInput>,
     ): CreateRecipeResult {
-        val trimmedName = name.trim().ifEmpty { return CreateRecipeResult.NameRequired }
+        val recipeName = NotBlankString.of(name) ?: return CreateRecipeResult.NameRequired
 
         ingredients.indices
             .filter { ingredients[it].isInvalid }
@@ -52,7 +53,7 @@ class CreateRecipeUseCase(
 
             val recipe = Recipe(
                 id = RecipeId(Uuid.random().toString()),
-                name = trimmedName,
+                name = recipeName,
                 status = status,
                 photoRef = null,
                 memo = null,
