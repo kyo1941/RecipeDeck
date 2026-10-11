@@ -31,8 +31,9 @@ Gradle を JDK 25 で動作させている場合でも、Java 11 でビルドし
 ## ドメイン層の方針
 
 - ドメイン層の型は、データ構造と不変条件（invariant）の保持に専念する。操作（メソッド）は UseCase 実装時に必要な分だけ追加する。先行して定義したドメイン型が UseCase の実装に伴い変化することは健全であるとみなす
-- 不変条件は生成時（コンストラクタや `of`）に検査し、不正な状態を作れないようにする
-- UI に伝達すべき想定内の失敗（入力値の不正など）は、ドメイン層ではなく UseCase の結果型（`:shared:usecase` に配置）で表現して返却する。Repository が返す失敗型は `:shared:domain` に配置する（詳細は「データ層の方針」参照）。失敗の分類方針は「UseCase の方針」に従う。なお、ドメイン層の `require` は事前検証漏れに対する最後の防衛線であり、そのメッセージによって処理を分岐させてはならない
+- 不正な状態は作れないようにし、作れないことを例外ではなく型で返す。値の規則は、値の型の生成関数（`of`）が null を返す形で守る（`NotBlankString`・`Quantity`・`Multiplier`）。理由を区別する必要がある場合は、null ではなく sealed interface の失敗型で返す。作れない値をデフォルト値に吸収するのは、その意味が仕様で決まっている場合（空白だけのメモをメモなしとする、など）に限る
+- 前後の空白を除いて空でない文字列（Recipe 名、メモ、Item の表示名など）は、共通の `NotBlankString` で表す。前後の空白の除去もその生成関数で行う。概念ごとに規則が分かれた場合は、その概念だけ別の型にする
+- UI に伝達すべき想定内の失敗（入力値の不正など）は、ドメイン層ではなく UseCase の結果型（`:shared:usecase` に配置）で表現して返却する。Repository が返す失敗型は `:shared:domain` に配置する（詳細は「データ層の方針」参照）。失敗の分類方針は「UseCase の方針」に従う
 - ID は文字列をラップする値クラス（value class）とする。内部には UUID 形式の文字列を格納する取り決めとし、型自体ではフォーマットの検証を行わない。ID の生成は UseCase 側で行う
 - 集約が保持するコレクションは kotlinx-collections-immutable の `ImmutableList` で受け取る。外部から渡されたリストが後から変更され、不変条件が崩れるのを防ぐためである
 - 日時には `kotlin.time.Instant` を使用する。現在時刻は UseCase 側から引数で渡し、ドメイン層内部では時刻取得を行わない
@@ -66,15 +67,15 @@ erDiagram
 
     Recipe {
         RecipeId id
-        string name
+        NotBlankString name
         string photoRef
-        string memo
+        NotBlankString memo
         RecipeStatus status
     }
 
     Item {
         ItemId id
-        string displayName
+        NotBlankString displayName
     }
 
     RecipeIngredient {
@@ -92,7 +93,7 @@ erDiagram
     SessionRecipe {
         SessionRecipeId id
         RecipeId sourceRecipeId
-        string recipeName
+        NotBlankString recipeName
         Multiplier multiplier
     }
 
@@ -113,7 +114,7 @@ erDiagram
 - 材料（RecipeIngredient）は、Recipe のコンテキストにおいて「対象の Item をどう使うか」を保持する中間モデル
 - Session 内の材料（SessionRecipeItem）も、ShoppingSession のコンテキストにおいて同様の責務を担う。分量を保持するのは特別なスナップショット用途ではなく、Recipe 側の中間モデルと同様の自然な責務である
 - 分量（`Amount`）は数量（`Quantity`）と入力形式（`QuantityNotation`）と省略可能な単位（`AmountUnit`）の組。材料は分量ごと省略できる
-- Item の参照（`ItemReference`）は、登録済みの Item を指す（`Registered`）か、表示名しか分からない（`Unregistered`）かを表す Item ドメインの型。材料の入力（`IngredientInput`）と SessionItem が、これを共通して使う
+- Item の参照（`ItemReference`）は、登録済みの Item を指す（`Registered`）か、表示名しか分からない（`Unregistered`）かを表す Item ドメインの型。SessionItem がこれを使う。材料の入力では、名前があることを確かめてからこれにする（「UseCase の方針」参照）
 - SessionItem は、Item を指すか、Session 限定の品目の表示名を持つ。Session 限定の品目は Item を作らず、Session と同じ寿命を持つ（[spec.md](spec.md#item)）
 - 状態（`SessionState`）は `Active` と `Completed(completedAt)`。完了日時は完了した Session だけが持つ
 - 手動追加は、SessionItem 内で省略可能（nullable）な `ManualAddition` として保持し、さらにその中に省略可能な分量を持たせる（2段階の nullable）。`ManualAddition` 自体が null であれば手動追加されていないことを示し、分量が null であれば「数量指定なしで手動追加された」ことを意味する
@@ -155,10 +156,12 @@ erDiagram
   - 失敗の種別は、実際に発生しうる実装段階になってから追加する。例えばネットワーク起因の失敗は、サーバー同期機能を実装する段階で追加する
 - Repository の失敗のうち、どれを個別に処理し、どれを同一視し、どれを汎用の `Unexpected` にまとめるかの判断は UseCase が担う。失敗型の変換処理を行う `when` 式では `else` 分岐を使用せず、Repository の失敗種別が増加した際にコンパイルエラーで検知できるようにする
 - コルーチンのキャンセル（`CancellationException`）は UseCase 内で捕捉・ハンドリングしない
-- 名前やメモの前後の空白除去（トリム）や、空白文字のみのメモを未設定（`null`）へ変換するといった、入力値の正規化処理は UseCase 側で行う
+- 名前やメモの前後の空白の除去は、製品全体で一貫する規則として domain の `NotBlankString` に置く。UseCase は入口で `NotBlankString.of` を1回呼び、null なら理由ごとの結果（`NameRequired` など）を返す。空白だけのメモをメモなしとするのも、`NotBlankString.of` が null を返すことをそのまま使う
 - 「下書き」や「利用可能」といったユーザーの選択値は、UI 層からの引数として受け取る
-- 入力フォームの都合から来るルール（表示名も分量もない材料は無視する、など）は、UseCase の入力の型（`IngredientInput`）に持たせ、UseCase の中で条件式として書かない。製品全体で一貫するルール（数量がなければ分量なし）は domain（`Amount.ofOrNull`）に置く
+- 入力フォームの都合から来るルールのうち、表示名がなく分量がある材料を不正とする判定は、UseCase の入力の型（`IngredientInput`）に持たせる。製品全体で一貫するルール（数量がなければ分量なし）は domain（`Amount.ofOrNull`）に置く
   - `IngredientInput` は、Recipe の作成・編集と、Session への Recipe の追加で共通して使う
+  - 材料の品目は、既存の Item を選んだか（`ItemInput.Selected`）、文字を打ったか（`ItemInput.Typed`。空白もありうる）を、入力のまま受け取る。打たれた文字は UseCase の中で `NotBlankString` にし、名前があるときだけ `ItemReference` にする。名前がない材料は、そこで記録から外す
+  - 入力の段階で `ItemReference` にしない（名前がない行を null で受け取らない）のは、null が「何もない」ではなく「空白を打った」という経緯を背負い、`ItemReference` の分類（`Registered` / `Unregistered`）に紛れ込むためである
 - 1つのトランザクションでは、1つの集約だけを変更することを原則とする。Recipe の作成・編集は例外で、材料の入力と同時に新しい Item を作るという UI の都合から、新しい Item と Recipe を `TransactionRunner` で1つのトランザクションにまとめる。集約の境界は変えない（Item は複数の Recipe や Session から共有され、寿命も Recipe と異なるため）
   - 取り消すかどうかは、使う側が `TransactionScope.rollback` で指示する。Repository は失敗を例外ではなく `Outcome.Failure` で返すため、`TransactionRunner` が結果を見て自動で取り消すことはしない
   - 保存は Item を先、Recipe を後にする。仮に同じトランザクションにできなくても、失敗して残るのは単独の Item だけになり、存在しない Item を参照する Recipe は残らない
@@ -216,7 +219,7 @@ AI による重複候補判定（13）は後から差し込む。
 入力は、Recipe ID と倍率、および追加の画面に出ている最終形の材料の一覧（倍率を掛け、量の変更・除外・今回だけの材料の追加を終えたもの）とする。
 材料の一覧は `IngredientInput` に除外の有無を加えた形で受け取る。
 倍率の計算はこの UseCase の外（追加の画面に出す分量を作るところ）で行い、UseCase は倍率を記録として残すだけである。
-倍率の計算で桁あふれした場合は予期しない失敗として扱う。計算をどこに置くか（UI か、表示用の分量を作る UseCase か）は、画面を作るときに決める。
+倍率の計算（`Quantity.times`）は、桁あふれすると null を返す。null の扱いと、計算をどこに置くか（UI か、表示用の分量を作る UseCase か）は、画面を作るときに決める。
 追加のたびに Session 内の Recipe を1つ作り、同じ品目の SessionItem は使い回す。
 
 ## AI / ML
@@ -251,9 +254,10 @@ PoC は完了済み。
 - Recipe の写真に関する未決定事項（詳細は [photo.md](photo.md) 参照）
 - Recipe 削除機能の実装時、編集画面からの保存によって削除済み Recipe を再作成しないようにするか。現時点では決めていない。今の実装は新規作成と同一の `save` メソッドで上書き保存する構成となっている
 - 変更がない状態での保存要求時にも永続化処理を行うかどうか。現時点では無条件で保存する実装となっており、将来のサーバー同期導入時に方針を決定する
-- Item の表示名の一致判定（検索の部分一致、作成時の重複検知の完全一致）をどこで行うか。現時点では、どちらも Repository から全件を読み込み、UseCase で絞り込んでいる。Recipe の作成・編集と Session への Recipe の追加の UseCase も、材料の新しい表示名を既存の Item と照らすために、Item を全件読み込んでいる。表示名の一致の規則（何を同じ名前とみなすか）を domain に置くかも、あわせて決める。データ層の実装時に、表示名を Repository へ渡す形へ移すかを、検索と作成で揃えて決める。Web 版では全件の通信が重くなること、SQLite の `LIKE` は英字の大文字・小文字を区別せず `%` や `_` のエスケープも必要なことを踏まえる。移した場合も、入力の正規化と空入力の扱いは UseCase に残す。あわせて、同じ表示名の Item の作成が同時に行われた場合の重複を、データ層でどう防ぐかも決める（Room の `@Transaction` で足りるか、一意制約が要るかなど）
+- Item の表示名の一致判定（検索の部分一致、作成時の重複検知の完全一致）をどこで行うか。現時点では、どちらも Repository から全件を読み込み、UseCase で絞り込んでいる。Recipe の作成・編集と Session への Recipe の追加の UseCase も、材料の新しい表示名を既存の Item と照らすために、Item を全件読み込んでいる。表示名の一致の規則（何を同じ名前とみなすか）を domain に置くかも、あわせて決める。データ層の実装時に、表示名を Repository へ渡す形へ移すかを、検索と作成で揃えて決める。Web 版では全件の通信が重くなること、SQLite の `LIKE` は英字の大文字・小文字を区別せず `%` や `_` のエスケープも必要なことを踏まえる。移した場合も、前後の空白の除去と空入力の扱いは今の場所（表示名は `NotBlankString`、検索語は UseCase）に残す。あわせて、同じ表示名の Item の作成が同時に行われた場合の重複を、データ層でどう防ぐかも決める（Room の `@Transaction` で足りるか、一意制約が要るかなど）
 - Recipe の保存時や Session への Recipe の追加時に既存の Item を使ったことを、材料の行単位で返す必要があるか。現時点では、使った既存の Item の一覧だけを返している。UI の実装時に確認する
-- domain の不変条件の守り方。今は生成時に `require` で例外を投げているが、クラッシュを防ぐため、生成時に null（理由を区別したい場合は sealed interface の失敗型）を返す形に置き換える方針とし、次の作業で行う。UI から呼ばれうる `Quantity.of` や、桁あふれで例外を投げる `Quantity` の計算も対象に含める。Arrow などのライブラリは今は使わない。値をデフォルト値に吸収するのは、その値の意味が仕様で決まっている場合（空白だけのメモをメモなしとする、など）に限る。想定外のデータ（保存先から読み戻した値が不変条件を満たさない、など）のログはデータ層で残す。ログの仕組みはデータ層の実装時に決める
+- 集約の規則の守り方。Recipe と ShoppingSession は、今も生成時に `require` で例外を投げている。クラッシュを防ぐため、規則を崩さない集約の操作で守り、保存先から読み戻すときだけ検査付きの生成関数（失敗は null か失敗型で返す）を使う形に置き換える方針とし、次の作業で行う。Arrow などのライブラリは今は使わない
+- 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合は、呼び出し側が個別に対処できることがないため、意味としては Repository の `Unexpected` に当たる。ただし `Unexpected` の中身が `Throwable` に固定されているので、データ層の実装時に見直す。ログもデータ層で残し、仕組みはそのときに決める。集計（11）での桁あふれは、spec の「互換性のない単位を無理に1つの数量へ変換しない」と同じく「1つの数量にまとめられない」状態として、集計の結果の一部で表す方向で検討する。表示の仕方は spec の範囲なので、11 で決める
 - 同じ端末で Session への追加が同時に走った場合（連打など）の扱い。UseCase は進行中の Session を読んでから保存するため、片方の追加が失われるか、データ層の一意制約で失敗しうる。データ層の実装時に決める
 - UseCase の結果を画面向けに変換する層を設けるか（Presentation の層を挟むか、ViewModel が直接扱うか）。UI の実装時に決める
 - 別名（alias）の具体的な永続化構造

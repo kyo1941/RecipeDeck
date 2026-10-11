@@ -6,9 +6,8 @@ data class Multiplier private constructor(
     val denominator: Long,
 ) {
     companion object {
-        fun of(numerator: Long, denominator: Long = 1): Multiplier {
-            require(numerator > 0) { "倍率は正の値でなければならない: $numerator/$denominator" }
-            require(denominator > 0) { "分母は正の値でなければならない: $numerator/$denominator" }
+        fun of(numerator: Long, denominator: Long = 1): Multiplier? {
+            if (numerator <= 0 || denominator <= 0) return null
             val divisor = gcd(numerator, denominator)
             return Multiplier(numerator / divisor, denominator / divisor)
         }

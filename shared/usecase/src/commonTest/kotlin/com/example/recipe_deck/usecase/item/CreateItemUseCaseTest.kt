@@ -3,6 +3,7 @@ package com.example.recipe_deck.usecase.item
 import com.example.recipe_deck.domain.item.Item
 import com.example.recipe_deck.domain.item.ItemId
 import com.example.recipe_deck.domain.item.ItemRepositoryFailure
+import com.example.recipe_deck.usecase.notBlankStringOrFail
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,7 +12,7 @@ class CreateItemUseCaseTest {
     private val itemRepository = FakeItemRepository()
     private val createItem = CreateItemUseCase(itemRepository)
 
-    private val groundMeat = Item(ItemId("item-1"), "ひき肉")
+    private val groundMeat = Item(ItemId("item-1"), notBlankStringOrFail("ひき肉"))
 
     @Test
     fun 指定された表示名でItemを保存する() = runTest {
@@ -19,14 +20,14 @@ class CreateItemUseCaseTest {
 
         val saved = itemRepository.savedItems.single()
         assertEquals(CreateItemResult.Created(saved.id), result)
-        assertEquals("豆腐", saved.displayName)
+        assertEquals("豆腐", saved.displayName.value)
     }
 
     @Test
     fun 表示名の前後の空白を除いて保存する() = runTest {
         createItem("　豆腐 \n")
 
-        assertEquals("豆腐", itemRepository.savedItems.single().displayName)
+        assertEquals("豆腐", itemRepository.savedItems.single().displayName.value)
     }
 
     @Test
@@ -55,7 +56,7 @@ class CreateItemUseCaseTest {
 
         val saved = itemRepository.savedItems.last()
         assertEquals(CreateItemResult.Created(saved.id), result)
-        assertEquals("肉", saved.displayName)
+        assertEquals("肉", saved.displayName.value)
     }
 
     @Test

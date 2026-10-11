@@ -4,7 +4,6 @@ package com.example.recipe_deck.usecase.shopping
 
 import com.example.recipe_deck.domain.amount.Amount
 import com.example.recipe_deck.domain.amount.AmountUnit
-import com.example.recipe_deck.domain.amount.Multiplier
 import com.example.recipe_deck.domain.amount.Quantity
 import com.example.recipe_deck.domain.amount.QuantityNotation
 import com.example.recipe_deck.domain.item.Item
@@ -20,7 +19,11 @@ import com.example.recipe_deck.domain.recipe.RecipeStatus
 import com.example.recipe_deck.domain.shopping.SessionState
 import com.example.recipe_deck.domain.shopping.ShoppingSessionRepositoryFailure
 import com.example.recipe_deck.usecase.ingredient.IngredientInput
+import com.example.recipe_deck.usecase.ingredient.ItemInput
 import com.example.recipe_deck.usecase.item.FakeItemRepository
+import com.example.recipe_deck.usecase.multiplierOrFail
+import com.example.recipe_deck.usecase.notBlankStringOrFail
+import com.example.recipe_deck.usecase.quantityOrFail
 import com.example.recipe_deck.usecase.recipe.FakeRecipeRepository
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.test.runTest
@@ -44,12 +47,12 @@ class AddRecipeToShoppingSessionUseCaseTest {
         },
     )
 
-    private val tofu = Item(ItemId("item-tofu"), "豆腐")
-    private val greenOnion = Item(ItemId("item-green-onion"), "長ネギ")
+    private val tofu = Item(ItemId("item-tofu"), notBlankStringOrFail("豆腐"))
+    private val greenOnion = Item(ItemId("item-green-onion"), notBlankStringOrFail("長ネギ"))
 
     private val mapoTofu = Recipe(
         id = RecipeId("recipe-mapo-tofu"),
-        name = "麻婆豆腐",
+        name = notBlankStringOrFail("麻婆豆腐"),
         status = RecipeStatus.READY,
         photoRef = null,
         memo = null,
@@ -59,7 +62,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
     )
 
     private fun ingredient(
-        item: ItemReference,
+        item: ItemInput,
         quantity: Quantity? = null,
         unit: AmountUnit? = null,
         isExcluded: Boolean = false,
@@ -71,8 +74,8 @@ class AddRecipeToShoppingSessionUseCaseTest {
 
         val result = addRecipe(
             recipeId = mapoTofu.id,
-            multiplier = Multiplier.of(1, 2),
-            ingredients = listOf(ingredient(ItemReference.Registered(tofu.id), Quantity.of(1, 2), AmountUnit.PIECE)),
+            multiplier = multiplierOrFail(1, 2),
+            ingredients = listOf(ingredient(ItemInput.Selected(tofu.id), quantityOrFail(1, 2), AmountUnit.PIECE)),
         )
 
         val saved = shoppingSessionRepository.savedSessions.single()
@@ -81,11 +84,11 @@ class AddRecipeToShoppingSessionUseCaseTest {
         assertEquals(SessionState.Active, saved.state)
         assertEquals(now, saved.createdAt)
         assertEquals(mapoTofu.id, sessionRecipe.sourceRecipeId)
-        assertEquals("麻婆豆腐", sessionRecipe.recipeName)
-        assertEquals(Multiplier.of(1, 2), sessionRecipe.multiplier)
+        assertEquals("麻婆豆腐", sessionRecipe.recipeName.value)
+        assertEquals(multiplierOrFail(1, 2), sessionRecipe.multiplier)
         assertEquals(ItemReference.Registered(tofu.id), saved.items.single().item)
         assertEquals(
-            Amount(Quantity.of(1, 2), QuantityNotation.FRACTION, AmountUnit.PIECE),
+            Amount(quantityOrFail(1, 2), QuantityNotation.FRACTION, AmountUnit.PIECE),
             sessionRecipe.items.single().amount,
         )
     }
@@ -93,10 +96,10 @@ class AddRecipeToShoppingSessionUseCaseTest {
     @Test
     fun 進行中のSessionがあればそこに追加する() = runTest {
         recipeRepository.savedRecipes += mapoTofu
-        addRecipe(mapoTofu.id, Multiplier.of(1), listOf(ingredient(ItemReference.Registered(tofu.id))))
+        addRecipe(mapoTofu.id, multiplierOrFail(1), listOf(ingredient(ItemInput.Selected(tofu.id))))
         val active = shoppingSessionRepository.savedSessions.single()
 
-        addRecipe(mapoTofu.id, Multiplier.of(1), listOf(ingredient(ItemReference.Registered(greenOnion.id))))
+        addRecipe(mapoTofu.id, multiplierOrFail(1), listOf(ingredient(ItemInput.Selected(greenOnion.id))))
 
         val saved = shoppingSessionRepository.savedSessions.last()
         assertEquals(active.id, saved.id)
@@ -106,13 +109,13 @@ class AddRecipeToShoppingSessionUseCaseTest {
     @Test
     fun 同じRecipeを2回追加すると別々のSessionRecipeになり同じItemのSessionItemを使い回す() = runTest {
         recipeRepository.savedRecipes += mapoTofu
-        addRecipe(mapoTofu.id, Multiplier.of(1), listOf(ingredient(ItemReference.Registered(tofu.id), Quantity.of(1))))
+        addRecipe(mapoTofu.id, multiplierOrFail(1), listOf(ingredient(ItemInput.Selected(tofu.id), quantityOrFail(1))))
 
-        addRecipe(mapoTofu.id, Multiplier.of(1, 2), listOf(ingredient(ItemReference.Registered(tofu.id), Quantity.of(1, 2))))
+        addRecipe(mapoTofu.id, multiplierOrFail(1, 2), listOf(ingredient(ItemInput.Selected(tofu.id), quantityOrFail(1, 2))))
 
         val saved = shoppingSessionRepository.savedSessions.last()
         val sessionItem = saved.items.single()
-        assertEquals(listOf(Multiplier.of(1), Multiplier.of(1, 2)), saved.recipes.map { it.multiplier })
+        assertEquals(listOf(multiplierOrFail(1), multiplierOrFail(1, 2)), saved.recipes.map { it.multiplier })
         assertEquals(listOf(sessionItem.id, sessionItem.id), saved.recipes.map { it.items.single().sessionItemId })
     }
 
@@ -122,10 +125,10 @@ class AddRecipeToShoppingSessionUseCaseTest {
 
         addRecipe(
             recipeId = mapoTofu.id,
-            multiplier = Multiplier.of(1),
+            multiplier = multiplierOrFail(1),
             ingredients = listOf(
-                ingredient(ItemReference.Registered(tofu.id)),
-                ingredient(ItemReference.Registered(greenOnion.id), isExcluded = true),
+                ingredient(ItemInput.Selected(tofu.id)),
+                ingredient(ItemInput.Selected(greenOnion.id), isExcluded = true),
             ),
         )
 
@@ -140,15 +143,15 @@ class AddRecipeToShoppingSessionUseCaseTest {
 
         val result = addRecipe(
             recipeId = mapoTofu.id,
-            multiplier = Multiplier.of(1),
+            multiplier = multiplierOrFail(1),
             ingredients = listOf(
-                ingredient(ItemReference.Unregistered(" 長ネギ")),
-                ingredient(ItemReference.Unregistered("豆板醤 "), Quantity.of(15), AmountUnit.GRAM),
+                ingredient(ItemInput.Typed(" 長ネギ")),
+                ingredient(ItemInput.Typed("豆板醤 "), quantityOrFail(15), AmountUnit.GRAM),
             ),
         )
 
         assertEquals(
-            listOf(ItemReference.Registered(greenOnion.id), ItemReference.Unregistered("豆板醤")),
+            listOf(ItemReference.Registered(greenOnion.id), ItemReference.Unregistered(notBlankStringOrFail("豆板醤"))),
             shoppingSessionRepository.savedSessions.single().items.map { it.item },
         )
         assertEquals(listOf(greenOnion), itemRepository.savedItems)
@@ -162,11 +165,11 @@ class AddRecipeToShoppingSessionUseCaseTest {
 
         val result = addRecipe(
             recipeId = mapoTofu.id,
-            multiplier = Multiplier.of(1),
+            multiplier = multiplierOrFail(1),
             ingredients = listOf(
-                ingredient(ItemReference.Unregistered("長ネギ")),
-                ingredient(ItemReference.Unregistered(" 長ネギ")),
-                ingredient(ItemReference.Registered(greenOnion.id)),
+                ingredient(ItemInput.Typed("長ネギ")),
+                ingredient(ItemInput.Typed(" 長ネギ")),
+                ingredient(ItemInput.Selected(greenOnion.id)),
             ),
         )
 
@@ -176,12 +179,12 @@ class AddRecipeToShoppingSessionUseCaseTest {
     @Test
     fun 同じ表示名のSession限定の品目は1つにまとめる() = runTest {
         recipeRepository.savedRecipes += mapoTofu
-        addRecipe(mapoTofu.id, Multiplier.of(1), listOf(ingredient(ItemReference.Unregistered("豆板醤"))))
+        addRecipe(mapoTofu.id, multiplierOrFail(1), listOf(ingredient(ItemInput.Typed("豆板醤"))))
 
-        addRecipe(mapoTofu.id, Multiplier.of(1), listOf(ingredient(ItemReference.Unregistered("豆板醤"))))
+        addRecipe(mapoTofu.id, multiplierOrFail(1), listOf(ingredient(ItemInput.Typed("豆板醤"))))
 
         val saved = shoppingSessionRepository.savedSessions.last()
-        assertEquals(ItemReference.Unregistered("豆板醤"), saved.items.single().item)
+        assertEquals(ItemReference.Unregistered(notBlankStringOrFail("豆板醤")), saved.items.single().item)
     }
 
     @Test
@@ -190,8 +193,8 @@ class AddRecipeToShoppingSessionUseCaseTest {
 
         addRecipe(
             recipeId = mapoTofu.id,
-            multiplier = Multiplier.of(1),
-            ingredients = listOf(ingredient(ItemReference.Unregistered(" ")), ingredient(ItemReference.Registered(tofu.id))),
+            multiplier = multiplierOrFail(1),
+            ingredients = listOf(ingredient(ItemInput.Typed(" ")), ingredient(ItemInput.Selected(tofu.id))),
         )
 
         assertEquals(1, shoppingSessionRepository.savedSessions.single().recipes.single().items.size)
@@ -201,7 +204,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
     fun 材料が無くてもRecipeを追加できる() = runTest {
         recipeRepository.savedRecipes += mapoTofu
 
-        val result = addRecipe(mapoTofu.id, Multiplier.of(1), emptyList())
+        val result = addRecipe(mapoTofu.id, multiplierOrFail(1), emptyList())
 
         assertEquals(AddRecipeToShoppingSessionResult.Added(persistentListOf()), result)
         assertEquals(emptyList(), shoppingSessionRepository.savedSessions.single().recipes.single().items)
@@ -213,10 +216,10 @@ class AddRecipeToShoppingSessionUseCaseTest {
 
         val result = addRecipe(
             recipeId = mapoTofu.id,
-            multiplier = Multiplier.of(1),
+            multiplier = multiplierOrFail(1),
             ingredients = listOf(
-                ingredient(ItemReference.Registered(tofu.id)),
-                ingredient(ItemReference.Unregistered(" "), Quantity.of(1), AmountUnit.PIECE),
+                ingredient(ItemInput.Selected(tofu.id)),
+                ingredient(ItemInput.Typed(" "), quantityOrFail(1), AmountUnit.PIECE),
             ),
         )
 
@@ -228,7 +231,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
     fun 下書きのRecipeは追加せずに失敗を返す() = runTest {
         recipeRepository.savedRecipes += mapoTofu.copy(status = RecipeStatus.DRAFT)
 
-        val result = addRecipe(mapoTofu.id, Multiplier.of(1), emptyList())
+        val result = addRecipe(mapoTofu.id, multiplierOrFail(1), emptyList())
 
         assertEquals(AddRecipeToShoppingSessionResult.RecipeIsDraft, result)
         assertEquals(emptyList(), shoppingSessionRepository.savedSessions)
@@ -236,7 +239,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
 
     @Test
     fun Recipeが無ければ追加せずに失敗を返す() = runTest {
-        val result = addRecipe(mapoTofu.id, Multiplier.of(1), emptyList())
+        val result = addRecipe(mapoTofu.id, multiplierOrFail(1), emptyList())
 
         assertEquals(AddRecipeToShoppingSessionResult.RecipeNoLongerExists, result)
         assertEquals(emptyList(), shoppingSessionRepository.savedSessions)
@@ -247,7 +250,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
         val cause = IllegalStateException("保存先から読み込めない")
         recipeRepository.findFailure = RecipeRepositoryFailure.Unexpected(cause)
 
-        val result = addRecipe(mapoTofu.id, Multiplier.of(1), emptyList())
+        val result = addRecipe(mapoTofu.id, multiplierOrFail(1), emptyList())
 
         assertEquals(AddRecipeToShoppingSessionResult.Unexpected(cause), result)
     }
@@ -258,7 +261,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
         val cause = IllegalStateException("保存先から読み込めない")
         itemRepository.findFailure = ItemRepositoryFailure.Unexpected(cause)
 
-        val result = addRecipe(mapoTofu.id, Multiplier.of(1), emptyList())
+        val result = addRecipe(mapoTofu.id, multiplierOrFail(1), emptyList())
 
         assertEquals(AddRecipeToShoppingSessionResult.Unexpected(cause), result)
         assertEquals(emptyList(), shoppingSessionRepository.savedSessions)
@@ -270,7 +273,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
         val cause = IllegalStateException("保存先から読み込めない")
         shoppingSessionRepository.findFailure = ShoppingSessionRepositoryFailure.Unexpected(cause)
 
-        val result = addRecipe(mapoTofu.id, Multiplier.of(1), emptyList())
+        val result = addRecipe(mapoTofu.id, multiplierOrFail(1), emptyList())
 
         assertEquals(AddRecipeToShoppingSessionResult.Unexpected(cause), result)
         assertEquals(emptyList(), shoppingSessionRepository.savedSessions)
@@ -282,7 +285,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
         val cause = IllegalStateException("保存先に書き込めない")
         shoppingSessionRepository.saveFailure = ShoppingSessionRepositoryFailure.Unexpected(cause)
 
-        val result = addRecipe(mapoTofu.id, Multiplier.of(1), emptyList())
+        val result = addRecipe(mapoTofu.id, multiplierOrFail(1), emptyList())
 
         assertEquals(AddRecipeToShoppingSessionResult.Unexpected(cause), result)
     }

@@ -3,6 +3,7 @@ package com.example.recipe_deck.usecase.item
 import com.example.recipe_deck.domain.item.Item
 import com.example.recipe_deck.domain.item.ItemId
 import com.example.recipe_deck.domain.item.ItemRepositoryFailure
+import com.example.recipe_deck.usecase.notBlankStringOrFail
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -12,9 +13,9 @@ class SearchItemsUseCaseTest {
     private val itemRepository = FakeItemRepository()
     private val searchItems = SearchItemsUseCase(itemRepository)
 
-    private val groundMeat = Item(ItemId("item-1"), "ひき肉")
-    private val porkBelly = Item(ItemId("item-2"), "豚バラ肉")
-    private val tofu = Item(ItemId("item-3"), "豆腐")
+    private val groundMeat = Item(ItemId("item-1"), notBlankStringOrFail("ひき肉"))
+    private val porkBelly = Item(ItemId("item-2"), notBlankStringOrFail("豚バラ肉"))
+    private val tofu = Item(ItemId("item-3"), notBlankStringOrFail("豆腐"))
 
     @Test
     fun 表示名に入力した文字を含むItemを返す() = runTest {

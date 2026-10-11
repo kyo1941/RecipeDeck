@@ -2,6 +2,7 @@
 
 package com.example.recipe_deck.usecase.item
 
+import com.example.recipe_deck.domain.NotBlankString
 import com.example.recipe_deck.domain.Outcome
 import com.example.recipe_deck.domain.item.Item
 import com.example.recipe_deck.domain.item.ItemId
@@ -14,19 +15,19 @@ class CreateItemUseCase(
     private val itemRepository: ItemRepository,
 ) {
     suspend operator fun invoke(displayName: String): CreateItemResult {
-        val trimmedDisplayName = displayName.trim().ifEmpty { return CreateItemResult.DisplayNameRequired }
+        val itemDisplayName = NotBlankString.of(displayName) ?: return CreateItemResult.DisplayNameRequired
 
         val existingItems = when (val found = itemRepository.findAll()) {
             is Outcome.Success -> found.value
             is Outcome.Failure -> return found.error.toCreateItemResult()
         }
-        existingItems.firstOrNull { it.displayName == trimmedDisplayName }?.let {
+        existingItems.firstOrNull { it.displayName == itemDisplayName }?.let {
             return CreateItemResult.AlreadyExists(it)
         }
 
         val item = Item(
             id = ItemId(Uuid.random().toString()),
-            displayName = trimmedDisplayName,
+            displayName = itemDisplayName,
         )
         return when (val saved = itemRepository.save(item)) {
             is Outcome.Success -> CreateItemResult.Created(item.id)

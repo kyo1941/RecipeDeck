@@ -16,7 +16,7 @@ class SearchItemsUseCase(
 
         return when (val found = itemRepository.findAll()) {
             is Outcome.Success -> SearchItemsResult.Found(
-                found.value.filter { it.displayName.contains(trimmedKeyword) }.toImmutableList(),
+                found.value.filter { it.displayName.value.contains(trimmedKeyword) }.toImmutableList(),
             )
             is Outcome.Failure -> found.error.toSearchItemsResult()
         }

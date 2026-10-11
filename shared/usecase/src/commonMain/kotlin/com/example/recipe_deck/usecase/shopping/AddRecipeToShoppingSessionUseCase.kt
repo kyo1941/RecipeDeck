@@ -2,6 +2,7 @@
 
 package com.example.recipe_deck.usecase.shopping
 
+import com.example.recipe_deck.domain.NotBlankString
 import com.example.recipe_deck.domain.Outcome
 import com.example.recipe_deck.domain.amount.Multiplier
 import com.example.recipe_deck.domain.item.Item
@@ -23,6 +24,7 @@ import com.example.recipe_deck.domain.shopping.ShoppingSession
 import com.example.recipe_deck.domain.shopping.ShoppingSessionId
 import com.example.recipe_deck.domain.shopping.ShoppingSessionRepository
 import com.example.recipe_deck.domain.shopping.ShoppingSessionRepositoryFailure
+import com.example.recipe_deck.usecase.ingredient.ItemInput
 import com.example.recipe_deck.usecase.item.linkToExistingItem
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -67,25 +69,26 @@ class AddRecipeToShoppingSessionUseCase(
 
         val sessionItems = session.items.associateByTo(mutableMapOf()) { it.item }
         val matchedExistingItems = mutableSetOf<Item>()
-        val recipeItems = ingredients
-            .filterNot { it.ingredient.isIgnorable }
-            .map { input ->
-                val item = when (val inputItem = input.ingredient.item) {
-                    is ItemReference.Registered -> inputItem
-                    is ItemReference.Unregistered -> inputItem.linkToExistingItem(existingItems).also { linked ->
+        val recipeItems = ingredients.mapNotNull { input ->
+            val item = when (val inputItem = input.ingredient.item) {
+                is ItemInput.Selected -> ItemReference.Registered(inputItem.itemId)
+                is ItemInput.Typed -> {
+                    val displayName = NotBlankString.of(inputItem.text) ?: return@mapNotNull null
+                    ItemReference.Unregistered(displayName).linkToExistingItem(existingItems).also { linked ->
                         if (linked is ItemReference.Registered) existingItemsById[linked.itemId]?.let { matchedExistingItems += it }
                     }
                 }
-                val sessionItem = sessionItems.getOrPut(item) {
-                    SessionItem(SessionItemId(Uuid.random().toString()), item, manualAddition = null)
-                }
-                SessionRecipeItem(
-                    id = SessionRecipeItemId(Uuid.random().toString()),
-                    sessionItemId = sessionItem.id,
-                    amount = input.ingredient.amount,
-                    isExcluded = input.isExcluded,
-                )
             }
+            val sessionItem = sessionItems.getOrPut(item) {
+                SessionItem(SessionItemId(Uuid.random().toString()), item, manualAddition = null)
+            }
+            SessionRecipeItem(
+                id = SessionRecipeItemId(Uuid.random().toString()),
+                sessionItemId = sessionItem.id,
+                amount = input.ingredient.amount,
+                isExcluded = input.isExcluded,
+            )
+        }
         val sessionRecipe = SessionRecipe(
             id = SessionRecipeId(Uuid.random().toString()),
             sourceRecipeId = recipe.id,
