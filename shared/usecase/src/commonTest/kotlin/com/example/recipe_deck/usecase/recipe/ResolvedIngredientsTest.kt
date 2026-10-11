@@ -8,6 +8,7 @@ import com.example.recipe_deck.domain.item.Item
 import com.example.recipe_deck.domain.item.ItemId
 import com.example.recipe_deck.domain.item.ItemReference
 import com.example.recipe_deck.usecase.ingredient.IngredientInput
+import com.example.recipe_deck.usecase.quantityOrFail
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -26,8 +27,8 @@ class ResolvedIngredientsTest {
     fun 選んだ既存のItemと分量を入力の順に材料にする() {
         val resolved = resolveIngredients(
             listOf(
-                ingredient(ItemReference.Registered(tofu.id), Quantity.of(1), AmountUnit.PIECE),
-                ingredient(ItemReference.Registered(groundMeat.id), Quantity.of(200), AmountUnit.GRAM),
+                ingredient(ItemReference.Registered(tofu.id), quantityOrFail(1), AmountUnit.PIECE),
+                ingredient(ItemReference.Registered(groundMeat.id), quantityOrFail(200), AmountUnit.GRAM),
             ),
             existingItems,
         )
@@ -35,8 +36,8 @@ class ResolvedIngredientsTest {
         assertEquals(listOf(tofu.id, groundMeat.id), resolved.recipeIngredients.map { it.itemId })
         assertEquals(
             listOf(
-                Amount(Quantity.of(1), QuantityNotation.FRACTION, AmountUnit.PIECE),
-                Amount(Quantity.of(200), QuantityNotation.FRACTION, AmountUnit.GRAM),
+                Amount(quantityOrFail(1), QuantityNotation.FRACTION, AmountUnit.PIECE),
+                Amount(quantityOrFail(200), QuantityNotation.FRACTION, AmountUnit.GRAM),
             ),
             resolved.recipeIngredients.map { it.amount },
         )

@@ -17,6 +17,7 @@ import com.example.recipe_deck.domain.recipe.RecipeStatus
 import com.example.recipe_deck.usecase.FakeTransactionRunner
 import com.example.recipe_deck.usecase.ingredient.IngredientInput
 import com.example.recipe_deck.usecase.item.FakeItemRepository
+import com.example.recipe_deck.usecase.quantityOrFail
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -97,7 +98,7 @@ class EditRecipeUseCaseTest {
             status = RecipeStatus.DRAFT,
             memo = "",
             ingredients = listOf(
-                ingredient(ItemReference.Registered(tofu.id), Quantity.of(1), AmountUnit.PIECE),
+                ingredient(ItemReference.Registered(tofu.id), quantityOrFail(1), AmountUnit.PIECE),
                 ingredient(ItemReference.Unregistered("長ネギ")),
                 ingredient(ItemReference.Unregistered(" ひき肉")),
             ),
@@ -108,7 +109,7 @@ class EditRecipeUseCaseTest {
         assertEquals(EditRecipeResult.Saved(persistentListOf(groundMeat)), result)
         assertEquals(listOf(tofu.id, created.id, groundMeat.id), ingredients.map { it.itemId })
         assertEquals(
-            listOf(Amount(Quantity.of(1), QuantityNotation.FRACTION, AmountUnit.PIECE), null, null),
+            listOf(Amount(quantityOrFail(1), QuantityNotation.FRACTION, AmountUnit.PIECE), null, null),
             ingredients.map { it.amount },
         )
     }
@@ -172,7 +173,7 @@ class EditRecipeUseCaseTest {
             memo = "",
             ingredients = listOf(
                 ingredient(ItemReference.Unregistered("長ネギ")),
-                ingredient(ItemReference.Unregistered(" "), Quantity.of(1), AmountUnit.PIECE),
+                ingredient(ItemReference.Unregistered(" "), quantityOrFail(1), AmountUnit.PIECE),
             ),
         )
 

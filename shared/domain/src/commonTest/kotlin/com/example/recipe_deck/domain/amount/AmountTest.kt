@@ -7,16 +7,16 @@ import kotlin.test.assertNull
 class AmountTest {
     @Test
     fun 入力した数量と入力形式と単位が分量になる() {
-        val amount = Amount.ofOrNull(Quantity.of(1, 2), QuantityNotation.DECIMAL, AmountUnit.PIECE)
+        val amount = Amount.ofOrNull(quantityOrFail(1, 2), QuantityNotation.DECIMAL, AmountUnit.PIECE)
 
-        assertEquals(Amount(Quantity.of(1, 2), QuantityNotation.DECIMAL, AmountUnit.PIECE), amount)
+        assertEquals(Amount(quantityOrFail(1, 2), QuantityNotation.DECIMAL, AmountUnit.PIECE), amount)
     }
 
     @Test
     fun 単位を入力しなければ単位なしの分量になる() {
-        val amount = Amount.ofOrNull(Quantity.of(2), QuantityNotation.FRACTION, unit = null)
+        val amount = Amount.ofOrNull(quantityOrFail(2), QuantityNotation.FRACTION, unit = null)
 
-        assertEquals(Amount(Quantity.of(2), QuantityNotation.FRACTION, unit = null), amount)
+        assertEquals(Amount(quantityOrFail(2), QuantityNotation.FRACTION, unit = null), amount)
     }
 
     @Test

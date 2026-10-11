@@ -4,9 +4,9 @@ package com.example.recipe_deck.domain.shopping
 
 import com.example.recipe_deck.domain.amount.Amount
 import com.example.recipe_deck.domain.amount.AmountUnit
-import com.example.recipe_deck.domain.amount.Multiplier
-import com.example.recipe_deck.domain.amount.Quantity
 import com.example.recipe_deck.domain.amount.QuantityNotation
+import com.example.recipe_deck.domain.amount.multiplierOrFail
+import com.example.recipe_deck.domain.amount.quantityOrFail
 import com.example.recipe_deck.domain.item.ItemId
 import com.example.recipe_deck.domain.item.ItemReference
 import com.example.recipe_deck.domain.recipe.RecipeId
@@ -29,14 +29,14 @@ class ShoppingSessionTest {
         id = SessionRecipeId("session-mapo-tofu"),
         sourceRecipeId = RecipeId("mapo-tofu"),
         recipeName = "麻婆豆腐",
-        multiplier = Multiplier.of(2),
+        multiplier = multiplierOrFail(2),
         items = persistentListOf(*items),
     )
 
     private fun requires(sessionItem: SessionItem, rowId: String = "row-1") = SessionRecipeItem(
         id = SessionRecipeItemId(rowId),
         sessionItemId = sessionItem.id,
-        amount = Amount(Quantity.of(1), QuantityNotation.FRACTION, AmountUnit.PIECE),
+        amount = Amount(quantityOrFail(1), QuantityNotation.FRACTION, AmountUnit.PIECE),
         isExcluded = false,
     )
 

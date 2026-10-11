@@ -5,6 +5,7 @@ import com.example.recipe_deck.domain.amount.Quantity
 import com.example.recipe_deck.domain.amount.QuantityNotation
 import com.example.recipe_deck.domain.item.ItemId
 import com.example.recipe_deck.domain.item.ItemReference
+import com.example.recipe_deck.usecase.quantityOrFail
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -28,7 +29,7 @@ class IngredientInputTest {
 
     @Test
     fun 表示名がなく数量があれば不正な材料になる() {
-        val input = ingredient(ItemReference.Unregistered(" "), Quantity.of(1), AmountUnit.PIECE)
+        val input = ingredient(ItemReference.Unregistered(" "), quantityOrFail(1), AmountUnit.PIECE)
 
         assertTrue(input.isInvalid)
         assertFalse(input.isIgnorable)
