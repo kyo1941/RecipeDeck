@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalTime::class, ExperimentalUuidApi::class)
+@file:OptIn(ExperimentalTime::class)
 
 package com.example.recipe_deck.usecase.shopping
 
@@ -30,8 +30,6 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 class AddRecipeToShoppingSessionUseCase(
     private val recipeRepository: RecipeRepository,
@@ -79,7 +77,7 @@ class AddRecipeToShoppingSessionUseCase(
                 }
             }
             val sessionItem = sessionItems.getOrPut(item) {
-                SessionItem(SessionItemId(Uuid.random().toString()), item, manualAddition = null)
+                SessionItem(SessionItemId.generate(), item, manualAddition = null)
             }
             SessionRecipeItem(
                 sessionItemId = sessionItem.id,
@@ -88,7 +86,7 @@ class AddRecipeToShoppingSessionUseCase(
             )
         }
         val sessionRecipe = SessionRecipe(
-            id = SessionRecipeId(Uuid.random().toString()),
+            id = SessionRecipeId.generate(),
             sourceRecipeId = recipe.id,
             recipeName = recipe.name,
             multiplier = multiplier,
@@ -106,7 +104,7 @@ class AddRecipeToShoppingSessionUseCase(
     }
 
     private fun newSession() = ShoppingSession(
-        id = ShoppingSessionId(Uuid.random().toString()),
+        id = ShoppingSessionId.generate(),
         state = SessionState.Active,
         createdAt = clock.now(),
         recipes = persistentListOf(),

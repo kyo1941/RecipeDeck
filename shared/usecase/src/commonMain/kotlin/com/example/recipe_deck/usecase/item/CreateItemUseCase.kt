@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalUuidApi::class)
-
 package com.example.recipe_deck.usecase.item
 
 import com.example.recipe_deck.domain.NotBlankString
@@ -8,8 +6,6 @@ import com.example.recipe_deck.domain.item.Item
 import com.example.recipe_deck.domain.item.ItemId
 import com.example.recipe_deck.domain.item.ItemRepository
 import com.example.recipe_deck.domain.item.ItemRepositoryFailure
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 class CreateItemUseCase(
     private val itemRepository: ItemRepository,
@@ -26,7 +22,7 @@ class CreateItemUseCase(
         }
 
         val item = Item(
-            id = ItemId(Uuid.random().toString()),
+            id = ItemId.generate(),
             displayName = itemDisplayName,
         )
         return when (val saved = itemRepository.save(item)) {

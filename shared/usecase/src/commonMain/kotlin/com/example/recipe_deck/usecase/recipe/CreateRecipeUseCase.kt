@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalUuidApi::class)
-
 package com.example.recipe_deck.usecase.recipe
 
 import com.example.recipe_deck.domain.NotBlankString
@@ -16,8 +14,6 @@ import com.example.recipe_deck.domain.recipe.RecipeStatus
 import com.example.recipe_deck.usecase.ingredient.IngredientInput
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 class CreateRecipeUseCase(
     private val recipeRepository: RecipeRepository,
@@ -52,7 +48,7 @@ class CreateRecipeUseCase(
             }
 
             val recipe = Recipe(
-                id = RecipeId(Uuid.random().toString()),
+                id = RecipeId.generate(),
                 name = recipeName,
                 status = status,
                 photoRef = null,
