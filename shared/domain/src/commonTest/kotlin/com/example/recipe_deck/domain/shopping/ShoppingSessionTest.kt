@@ -11,129 +11,93 @@ import com.example.recipe_deck.domain.item.ItemId
 import com.example.recipe_deck.domain.item.ItemReference
 import com.example.recipe_deck.domain.notBlankStringOrFail
 import com.example.recipe_deck.domain.recipe.RecipeId
-import kotlinx.collections.immutable.ImmutableList
-import kotlinx.collections.immutable.persistentListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 class ShoppingSessionTest {
-    private val greenOnion = SessionItem(
-        SessionItemId("session-green-onion"),
-        ItemReference.Registered(ItemId("green-onion")),
-        manualAddition = null,
-    )
-
-    private fun mapoTofu(vararg items: SessionRecipeItem) = SessionRecipe(
-        id = SessionRecipeId("session-mapo-tofu"),
-        sourceRecipeId = RecipeId("mapo-tofu"),
-        recipeName = notBlankStringOrFail("麻婆豆腐"),
-        multiplier = multiplierOrFail(2),
-        items = persistentListOf(*items),
-    )
-
-    private fun requires(sessionItem: SessionItem) = SessionRecipeItem(
-        sessionItemId = sessionItem.id,
-        amount = Amount(quantityOrFail(1), QuantityNotation.FRACTION, AmountUnit.PIECE),
-        isExcluded = false,
-    )
-
     private val createdAt = Instant.parse("2026-10-04T10:00:00Z")
+    private val mapoTofu = RecipeId("mapo-tofu")
+    private val greenOnion = ItemReference.Registered(ItemId("green-onion"))
+    private val doubanjiang = ItemReference.Unregistered(notBlankStringOrFail("豆板醤"))
+    private val onePiece = Amount(quantityOrFail(1), QuantityNotation.FRACTION, AmountUnit.PIECE)
 
-    private fun session(
-        state: SessionState = SessionState.Active,
-        recipes: ImmutableList<SessionRecipe> = persistentListOf(),
-        items: ImmutableList<SessionItem> = persistentListOf(),
-    ) =
-        ShoppingSession(ShoppingSessionId("session-1"), state, createdAt, recipes, items)
+    private fun row(
+        item: ItemReference,
+        amount: Amount? = onePiece,
+        isExcluded: Boolean = false,
+    ) = SessionRecipeRow(item, amount, isExcluded)
+
+    private fun ShoppingSession.withAddedMapoTofu(vararg rows: SessionRecipeRow) =
+        withAddedRecipe(mapoTofu, notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), rows.toList())
 
     @Test
-    fun 作成日時より後に完了したSessionを作れる() {
-        val completed = SessionState.Completed(completedAt = Instant.parse("2026-10-04T11:00:00Z"))
+    fun 作ったSessionは進行中で中身が空になる() {
+        val session = ShoppingSession.create(createdAt)
 
-        assertEquals(completed, session(state = completed).state)
+        assertEquals(SessionState.Active, session.state)
+        assertEquals(createdAt, session.createdAt)
+        assertEquals(emptyList(), session.recipes)
+        assertEquals(emptyList(), session.items)
     }
 
     @Test
-    fun 完了日時が作成日時より前のSessionは作れない() {
-        val completedBeforeCreation = SessionState.Completed(completedAt = Instant.parse("2026-10-04T09:00:00Z"))
+    fun Recipeを足すと元のRecipeと名前と倍率と材料を写したSession内のRecipeができる() {
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(row(greenOnion))
 
-        assertFailsWith<IllegalArgumentException> { session(state = completedBeforeCreation) }
+        val recipe = session.recipes.single()
+        val item = session.items.single()
+        assertEquals(mapoTofu, recipe.sourceRecipeId)
+        assertEquals("麻婆豆腐", recipe.recipeName.value)
+        assertEquals(multiplierOrFail(2), recipe.multiplier)
+        assertEquals(greenOnion, item.item)
+        assertNull(item.manualAddition)
+        assertEquals(listOf(SessionRecipeItem(item.id, onePiece, isExcluded = false)), recipe.items)
     }
 
     @Test
-    fun Recipe由来の材料と同じItemを手動でも追加できる() {
-        val greenOnionAlsoManual = greenOnion.copy(manualAddition = ManualAddition(amount = null))
+    fun 同じItemの材料が複数あってもSessionItemは1つにまとめる() {
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(row(greenOnion), row(greenOnion, amount = null))
 
-        val session = session(recipes = persistentListOf(mapoTofu(requires(greenOnionAlsoManual))), items = persistentListOf(greenOnionAlsoManual))
-
-        assertEquals(ManualAddition(amount = null), session.items.single().manualAddition)
+        val item = session.items.single()
+        assertEquals(listOf(item.id, item.id), session.recipes.single().items.map { it.sessionItemId })
     }
 
     @Test
-    fun 数量なしの手動追加だけでSessionItemを持てる() {
-        val manualOnly = greenOnion.copy(manualAddition = ManualAddition(amount = null))
+    fun 同じ表示名のSession限定の品目はSessionItemを1つにまとめる() {
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(row(doubanjiang), row(doubanjiang))
 
-        assertEquals(persistentListOf(manualOnly), session(items = persistentListOf(manualOnly)).items)
+        assertEquals(doubanjiang, session.items.single().item)
     }
 
     @Test
-    fun 同じItemのSessionItemを複数持てない() {
-        val duplicated = SessionItem(SessionItemId("session-green-onion-2"), greenOnion.item, ManualAddition(amount = null))
+    fun 同じRecipeを2回足すと別々のSession内のRecipeになり同じ品目のSessionItemを使い回す() {
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(row(greenOnion)).withAddedMapoTofu(row(greenOnion))
 
-        assertFailsWith<IllegalArgumentException> {
-            session(recipes = persistentListOf(mapoTofu(requires(greenOnion))), items = persistentListOf(greenOnion, duplicated))
-        }
+        val item = session.items.single()
+        assertEquals(2, session.recipes.size)
+        assertNotEquals(session.recipes[0].id, session.recipes[1].id)
+        assertEquals(listOf(item.id, item.id), session.recipes.map { it.items.single().sessionItemId })
     }
 
     @Test
-    fun Session限定の品目をSessionItemとして持てる() {
-        val doubanjiang = SessionItem(SessionItemId("session-doubanjiang"), ItemReference.Unregistered(notBlankStringOrFail("豆板醤")), manualAddition = null)
+    fun 除外した材料もSessionItemを指す行として残す() {
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(row(greenOnion, isExcluded = true))
 
-        val session = session(recipes = persistentListOf(mapoTofu(requires(doubanjiang))), items = persistentListOf(doubanjiang))
-
-        assertEquals(ItemReference.Unregistered(notBlankStringOrFail("豆板醤")), session.items.single().item)
+        val recipeItem = session.recipes.single().items.single()
+        assertEquals(session.items.single().id, recipeItem.sessionItemId)
+        assertTrue(recipeItem.isExcluded)
     }
 
     @Test
-    fun 同じ表示名のSession限定の品目を複数持てない() {
-        val doubanjiang = SessionItem(SessionItemId("session-doubanjiang"), ItemReference.Unregistered(notBlankStringOrFail("豆板醤")), ManualAddition(amount = null))
-        val duplicated = doubanjiang.copy(id = SessionItemId("session-doubanjiang-2"))
+    fun 材料のないRecipeを足してもSessionItemは増えない() {
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu()
 
-        assertFailsWith<IllegalArgumentException> { session(items = persistentListOf(doubanjiang, duplicated)) }
-    }
-
-    @Test
-    fun 同じSessionItemのIDを重複して持てない() {
-        val tofu = SessionItem(greenOnion.id, ItemReference.Registered(ItemId("tofu")), ManualAddition(amount = null))
-        val manualGreenOnion = greenOnion.copy(manualAddition = ManualAddition(amount = null))
-
-        assertFailsWith<IllegalArgumentException> { session(items = persistentListOf(manualGreenOnion, tofu)) }
-    }
-
-    @Test
-    fun 同じSessionRecipeのIDを重複して持てない() {
-        assertFailsWith<IllegalArgumentException> { session(recipes = persistentListOf(mapoTofu(), mapoTofu())) }
-    }
-
-    @Test
-    fun Sessionに無いSessionItemを材料行から参照できない() {
-        assertFailsWith<IllegalArgumentException> {
-            session(recipes = persistentListOf(mapoTofu(requires(greenOnion))), items = persistentListOf())
-        }
-    }
-
-    @Test
-    fun Recipe由来でも手動追加でもないSessionItemは持てない() {
-        assertFailsWith<IllegalArgumentException> { session(items = persistentListOf(greenOnion)) }
-    }
-
-    @Test
-    fun 除外した材料行も参照としてSessionItemを支える() {
-        val excluded = requires(greenOnion).copy(isExcluded = true)
-
-        assertEquals(persistentListOf(greenOnion), session(recipes = persistentListOf(mapoTofu(excluded)), items = persistentListOf(greenOnion)).items)
+        assertEquals(1, session.recipes.size)
+        assertEquals(emptyList(), session.items)
     }
 }

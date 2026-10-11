@@ -13,20 +13,13 @@ import com.example.recipe_deck.domain.recipe.RecipeId
 import com.example.recipe_deck.domain.recipe.RecipeRepository
 import com.example.recipe_deck.domain.recipe.RecipeRepositoryFailure
 import com.example.recipe_deck.domain.recipe.RecipeStatus
-import com.example.recipe_deck.domain.shopping.SessionItem
-import com.example.recipe_deck.domain.shopping.SessionItemId
-import com.example.recipe_deck.domain.shopping.SessionRecipe
-import com.example.recipe_deck.domain.shopping.SessionRecipeId
-import com.example.recipe_deck.domain.shopping.SessionRecipeItem
-import com.example.recipe_deck.domain.shopping.SessionState
+import com.example.recipe_deck.domain.shopping.SessionRecipeRow
 import com.example.recipe_deck.domain.shopping.ShoppingSession
-import com.example.recipe_deck.domain.shopping.ShoppingSessionId
 import com.example.recipe_deck.domain.shopping.ShoppingSessionRepository
 import com.example.recipe_deck.domain.shopping.ShoppingSessionRepositoryFailure
 import com.example.recipe_deck.usecase.ingredient.ItemInput
 import com.example.recipe_deck.usecase.item.linkToExistingItem
 import kotlinx.collections.immutable.ImmutableList
-import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -60,13 +53,12 @@ class AddRecipeToShoppingSessionUseCase(
         val existingItemsById = existingItems.values.associateBy { it.id }
 
         val session = when (val found = shoppingSessionRepository.findActive()) {
-            is Outcome.Success -> found.value ?: newSession()
+            is Outcome.Success -> found.value ?: ShoppingSession.create(clock.now())
             is Outcome.Failure -> return found.error.toAddRecipeToShoppingSessionResult()
         }
 
-        val sessionItems = session.items.associateByTo(mutableMapOf()) { it.item }
         val matchedExistingItems = mutableSetOf<Item>()
-        val recipeItems = ingredients.mapNotNull { input ->
+        val rows = ingredients.mapNotNull { input ->
             val item = when (val inputItem = input.ingredient.item) {
                 is ItemInput.Selected -> ItemReference.Registered(inputItem.itemId)
                 is ItemInput.Typed -> {
@@ -76,40 +68,15 @@ class AddRecipeToShoppingSessionUseCase(
                     }
                 }
             }
-            val sessionItem = sessionItems.getOrPut(item) {
-                SessionItem(SessionItemId.generate(), item, manualAddition = null)
-            }
-            SessionRecipeItem(
-                sessionItemId = sessionItem.id,
-                amount = input.ingredient.amount,
-                isExcluded = input.isExcluded,
-            )
+            SessionRecipeRow(item, input.ingredient.amount, input.isExcluded)
         }
-        val sessionRecipe = SessionRecipe(
-            id = SessionRecipeId.generate(),
-            sourceRecipeId = recipe.id,
-            recipeName = recipe.name,
-            multiplier = multiplier,
-            items = recipeItems.toImmutableList(),
-        )
-        val updatedSession = session.copy(
-            recipes = (session.recipes + sessionRecipe).toImmutableList(),
-            items = sessionItems.values.toImmutableList(),
-        )
+        val updatedSession = session.withAddedRecipe(recipe.id, recipe.name, multiplier, rows)
 
         return when (val saved = shoppingSessionRepository.save(updatedSession)) {
             is Outcome.Success -> AddRecipeToShoppingSessionResult.Added(matchedExistingItems.toImmutableList())
             is Outcome.Failure -> saved.error.toAddRecipeToShoppingSessionResult()
         }
     }
-
-    private fun newSession() = ShoppingSession(
-        id = ShoppingSessionId.generate(),
-        state = SessionState.Active,
-        createdAt = clock.now(),
-        recipes = persistentListOf(),
-        items = persistentListOf(),
-    )
 
     private fun RecipeRepositoryFailure.toAddRecipeToShoppingSessionResult(): AddRecipeToShoppingSessionResult =
         when (this) {
