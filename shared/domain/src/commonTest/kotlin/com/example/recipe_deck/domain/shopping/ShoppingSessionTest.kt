@@ -22,6 +22,7 @@ import kotlin.time.Instant
 class ShoppingSessionTest {
     private val createdAt = Instant.parse("2026-10-04T10:00:00Z")
     private val mapoTofu = RecipeId("mapo-tofu")
+    private val friedRice = RecipeId("fried-rice")
     private val greenOnionId = ItemId("green-onion")
     private val greenOnion = notBlankStringOrFail("長ネギ")
     private val doubanjiang = notBlankStringOrFail("豆板醤")
@@ -121,5 +122,51 @@ class ShoppingSessionTest {
 
         assertEquals(1, session.recipes.size)
         assertEquals(emptyList(), session.items)
+    }
+
+    // TODO: 手動追加のある Session を作る手段（手動追加の操作か、保存先からの読み戻し）がまだないため、手動追加が内訳の最後に並ぶことは確かめていない。
+    //  手段ができたら確かめる。
+    @Test
+    fun 買い物リストはSessionItemごとに項目を作り全てのSession内のRecipeからその品目の材料を内訳として集める() {
+        val halfPiece = Amount(quantityOrFail(1, 2), QuantityNotation.FRACTION, AmountUnit.PIECE)
+        val session = ShoppingSession.create(createdAt)
+            .withAddedMapoTofu(ingredient(greenOnion, greenOnionId), ingredient(doubanjiang, amount = null))
+            .withAddedRecipe(friedRice, notBlankStringOrFail("炒飯"), multiplierOrFail(1), listOf(ingredient(greenOnion, greenOnionId, amount = halfPiece)))
+
+        val shoppingList = session.toShoppingList()
+
+        assertEquals(session.items.map { it.id }, shoppingList.map { it.sessionItemId })
+        assertEquals(listOf("長ネギ", "豆板醤"), shoppingList.map { it.displayName.value })
+        assertEquals(listOf(greenOnionId, null), shoppingList.map { it.itemId })
+        assertEquals(
+            listOf<ShoppingListItemSource>(
+                ShoppingListItemSource.FromRecipe(notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), onePiece, isExcluded = false),
+                ShoppingListItemSource.FromRecipe(notBlankStringOrFail("炒飯"), multiplierOrFail(1), halfPiece, isExcluded = false),
+            ),
+            shoppingList[0].sources,
+        )
+        assertEquals(
+            listOf<ShoppingListItemSource>(ShoppingListItemSource.FromRecipe(notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), amount = null, isExcluded = false)),
+            shoppingList[1].sources,
+        )
+    }
+
+    // TODO: 手動追加のある Session を作る手段（手動追加の操作か、保存先からの読み戻し）がまだないため、Recipe 由来の内訳がなく手動追加だけの品目も買い物項目になることは確かめていない。
+    //  手段ができたら確かめる。
+    @Test
+    fun 材料が全て除外された品目も除外した内訳を持つ項目として買い物リストに残す() {
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion, greenOnionId, isExcluded = true))
+
+        val sources = session.toShoppingList().single().sources
+
+        assertEquals(
+            listOf<ShoppingListItemSource>(ShoppingListItemSource.FromRecipe(notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), onePiece, isExcluded = true)),
+            sources,
+        )
+    }
+
+    @Test
+    fun 品目のないSessionの買い物リストは空になる() {
+        assertEquals(emptyList(), ShoppingSession.create(createdAt).toShoppingList())
     }
 }
