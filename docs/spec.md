@@ -34,7 +34,6 @@ MVP ではユーザー自身が所有する Recipe を前提とし、公開・�
 | Recipe | `Recipe` | ユーザーが再利用する「作るもの」 |
 | 材料 | `RecipeIngredient` | Recipe で、ある Item をどれだけ使うか |
 | Item | `Item` | 買い物対象の同一性（ひき肉、豆腐、長ネギ） |
-| Item の参照 | `ItemReference` | 登録済みの Item（`Registered`）か、表示名しか分からないもの（`Unregistered`）か |
 | 分量 | `Amount` | 数量と入力形式と、省略可能な単位の組 |
 | 数量 | `Quantity` | 正の有理数 |
 | 入力形式 | `QuantityNotation` | 数量を分数と小数のどちらで入力したか |

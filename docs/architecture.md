@@ -114,7 +114,6 @@ erDiagram
 - 材料（RecipeIngredient）は、Recipe のコンテキストにおいて「対象の Item をどう使うか」を保持する中間モデル
 - Session 内の材料（SessionRecipeIngredient）も、ShoppingSession のコンテキストにおいて同様の責務を担う。分量を保持するのは特別なスナップショット用途ではなく、Recipe 側の中間モデルと同様の自然な責務である
 - 分量（`Amount`）は数量（`Quantity`）と入力形式（`QuantityNotation`）と省略可能な単位（`AmountUnit`）の組。材料は分量ごと省略できる
-- Item の参照（`ItemReference`）は、登録済みの Item を指す（`Registered`）か、表示名しか分からない（`Unregistered`）かを表す Item ドメインの型。Recipe の保存で、材料の表示名を既存の Item と照らすときに使う。材料の入力では、名前があることを確かめてからこれにする（「UseCase の方針」参照）
 - SessionItem は表示名を持つ。Item から作った品目は、Item へのつながり（`itemId`）も持つ。表示名は Recipe を追加したときに Item から写し、その後の Item の変更は反映しない。`itemId` は Item の画面への移動などの利便性のためのもので、Session の中身は Item に依存しない（[spec.md](spec.md#shoppingsession)）
 - `itemId` のない SessionItem が Session 限定の品目。Item を作らず、Session と同じ寿命を持つ（[spec.md](spec.md#item)）
 - 状態（`SessionState`）は `Active` と `Completed(completedAt)`。完了日時は完了した Session だけが持つ
@@ -162,8 +161,8 @@ erDiagram
 - 「下書き」や「利用可能」といったユーザーの選択値は、UI 層からの引数として受け取る
 - 入力フォームの都合から来るルールのうち、表示名がなく分量がある材料を不正とする判定は、UseCase の入力の型（`IngredientInput`）に持たせる。製品全体で一貫するルール（数量がなければ分量なし）は domain（`Amount.ofOrNull`）に置く
   - `IngredientInput` は、Recipe の作成・編集と、Session への Recipe の追加で共通して使う
-  - 材料の品目は、既存の Item を選んだか（`ItemInput.Selected`）、文字を打ったか（`ItemInput.Typed`。空白もありうる）を、入力のまま受け取る。打たれた文字は UseCase の中で `NotBlankString` にし、名前があるときだけ、Recipe の保存では `ItemReference` に、Session への追加では Session に写す表示名にする。名前がない材料は、そこで記録から外す
-  - 入力の段階で `ItemReference` にしない（名前がない行を null で受け取らない）のは、null が「何もない」ではなく「空白を打った」という経緯を背負い、`ItemReference` の分類（`Registered` / `Unregistered`）に紛れ込むためである
+  - 材料の品目は、既存の Item を選んだか（`ItemInput.Selected`）、文字を打ったか（`ItemInput.Typed`。空白もありうる）を、入力のまま受け取る。打たれた文字は UseCase の中で `NotBlankString` にし、名前がない材料は、そこで記録から外す
+  - 入力の段階で名前を確かめない（名前がない行を null で受け取らない）のは、null が「何もない」ではなく「空白を打った」という経緯を背負い、既存の Item を選んだか名前を打ったかの区別に紛れ込むためである
 - 1つのトランザクションでは、1つの集約だけを変更することを原則とする。Recipe の作成・編集は例外で、材料の入力と同時に新しい Item を作るという UI の都合から、新しい Item と Recipe を `TransactionRunner` で1つのトランザクションにまとめる。集約の境界は変えない（Item は複数の Recipe や Session から共有され、寿命も Recipe と異なるため）
   - 取り消すかどうかは、使う側が `TransactionScope.rollback` で指示する。Repository は失敗を例外ではなく `Outcome.Failure` で返すため、`TransactionRunner` が結果を見て自動で取り消すことはしない
   - 保存は Item を先、Recipe を後にする。仮に同じトランザクションにできなくても、失敗して残るのは単独の Item だけになり、存在しない Item を参照する Recipe は残らない
