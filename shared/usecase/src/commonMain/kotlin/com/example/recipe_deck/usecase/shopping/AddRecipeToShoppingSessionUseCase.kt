@@ -51,33 +51,33 @@ class AddRecipeToShoppingSessionUseCase(
         val existingItemsById = existingItems.associateBy { it.id }
         val existingItemsByDisplayName = existingItems.associateBy { it.displayName }
 
-        ingredients.indices
-            .filter { index ->
-                val item = ingredients[index].ingredient.item
-                item is ItemInput.Selected && item.itemId !in existingItemsById
+        val matchedExistingItems = mutableSetOf<Item>()
+        val missingSelectedIndexes = mutableListOf<Int>()
+        val addedIngredients = ingredients.mapIndexedNotNull { index, input ->
+            val (displayName, itemId) = when (val inputItem = input.ingredient.item) {
+                is ItemInput.Selected -> {
+                    val selectedItem = existingItemsById[inputItem.itemId]
+                    if (selectedItem == null) {
+                        missingSelectedIndexes += index
+                        return@mapIndexedNotNull null
+                    }
+                    selectedItem.displayName to selectedItem.id
+                }
+                is ItemInput.Typed -> {
+                    val displayName = NotBlankString.of(inputItem.text) ?: return@mapIndexedNotNull null
+                    val existingItem = existingItemsByDisplayName[displayName]?.also { matchedExistingItems += it }
+                    displayName to existingItem?.id
+                }
             }
+            AddedRecipeIngredient(displayName, itemId, input.ingredient.amount, input.isExcluded)
+        }
+        missingSelectedIndexes
             .takeIf { it.isNotEmpty() }
             ?.let { return AddRecipeToShoppingSessionResult.SelectedItemNoLongerExists(it.toImmutableList()) }
 
         val session = when (val found = shoppingSessionRepository.findActive()) {
             is Outcome.Success -> found.value ?: ShoppingSession.create(clock.now())
             is Outcome.Failure -> return found.error.toAddRecipeToShoppingSessionResult()
-        }
-
-        val matchedExistingItems = mutableSetOf<Item>()
-        val addedIngredients = ingredients.mapNotNull { input ->
-            val (displayName, itemId) = when (val inputItem = input.ingredient.item) {
-                is ItemInput.Selected -> {
-                    val item = existingItemsById[inputItem.itemId] ?: return@mapNotNull null
-                    item.displayName to item.id
-                }
-                is ItemInput.Typed -> {
-                    val displayName = NotBlankString.of(inputItem.text) ?: return@mapNotNull null
-                    val existingItem = existingItemsByDisplayName[displayName]?.also { matchedExistingItems += it }
-                    displayName to existingItem?.id
-                }
-            }
-            AddedRecipeIngredient(displayName, itemId, input.ingredient.amount, input.isExcluded)
         }
 
         val updatedSession = session.withAddedRecipe(recipe.id, recipe.name, multiplier, addedIngredients)
