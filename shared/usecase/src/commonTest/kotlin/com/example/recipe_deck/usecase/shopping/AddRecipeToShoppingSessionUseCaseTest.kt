@@ -8,7 +8,6 @@ import com.example.recipe_deck.domain.amount.Quantity
 import com.example.recipe_deck.domain.amount.QuantityNotation
 import com.example.recipe_deck.domain.item.Item
 import com.example.recipe_deck.domain.item.ItemId
-import com.example.recipe_deck.domain.item.ItemReference
 import com.example.recipe_deck.domain.item.ItemRepositoryFailure
 import com.example.recipe_deck.domain.recipe.Recipe
 import com.example.recipe_deck.domain.recipe.RecipeId
@@ -70,6 +69,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
     @Test
     fun 進行中のSessionが無ければ作ってRecipeを追加する() = runTest {
         recipeRepository.savedRecipes += mapoTofu
+        itemRepository.savedItems += tofu
 
         val result = addRecipe(
             recipeId = mapoTofu.id,
@@ -85,7 +85,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
         assertEquals(mapoTofu.id, sessionRecipe.sourceRecipeId)
         assertEquals("麻婆豆腐", sessionRecipe.recipeName.value)
         assertEquals(multiplierOrFail(1, 2), sessionRecipe.multiplier)
-        assertEquals(ItemReference.Registered(tofu.id), saved.items.single().item)
+        assertEquals(tofu.displayName to tofu.id, saved.items.single().let { it.displayName to it.itemId })
         assertEquals(
             Amount(quantityOrFail(1, 2), QuantityNotation.FRACTION, AmountUnit.PIECE),
             sessionRecipe.ingredients.single().amount,
@@ -95,6 +95,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
     @Test
     fun 進行中のSessionがあればそこに追加する() = runTest {
         recipeRepository.savedRecipes += mapoTofu
+        itemRepository.savedItems += listOf(tofu, greenOnion)
         addRecipe(mapoTofu.id, multiplierOrFail(1), listOf(ingredient(ItemInput.Selected(tofu.id))))
         val active = shoppingSessionRepository.savedSessions.single()
 
@@ -108,6 +109,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
     @Test
     fun 同じRecipeを2回追加すると別々のSessionRecipeになり同じItemのSessionItemを使い回す() = runTest {
         recipeRepository.savedRecipes += mapoTofu
+        itemRepository.savedItems += tofu
         addRecipe(mapoTofu.id, multiplierOrFail(1), listOf(ingredient(ItemInput.Selected(tofu.id), quantityOrFail(1))))
 
         addRecipe(mapoTofu.id, multiplierOrFail(1, 2), listOf(ingredient(ItemInput.Selected(tofu.id), quantityOrFail(1, 2))))
@@ -121,6 +123,7 @@ class AddRecipeToShoppingSessionUseCaseTest {
     @Test
     fun 除外した材料も除外した行として追加する() = runTest {
         recipeRepository.savedRecipes += mapoTofu
+        itemRepository.savedItems += listOf(tofu, greenOnion)
 
         addRecipe(
             recipeId = mapoTofu.id,
@@ -150,8 +153,8 @@ class AddRecipeToShoppingSessionUseCaseTest {
         )
 
         assertEquals(
-            listOf(ItemReference.Registered(greenOnion.id), ItemReference.Unregistered(notBlankStringOrFail("豆板醤"))),
-            shoppingSessionRepository.savedSessions.single().items.map { it.item },
+            listOf("長ネギ" to greenOnion.id, "豆板醤" to null),
+            shoppingSessionRepository.savedSessions.single().items.map { it.displayName.value to it.itemId },
         )
         assertEquals(listOf(greenOnion), itemRepository.savedItems)
         assertEquals(AddRecipeToShoppingSessionResult.Added(persistentListOf(greenOnion)), result)
@@ -183,12 +186,45 @@ class AddRecipeToShoppingSessionUseCaseTest {
         addRecipe(mapoTofu.id, multiplierOrFail(1), listOf(ingredient(ItemInput.Typed("豆板醤"))))
 
         val saved = shoppingSessionRepository.savedSessions.last()
-        assertEquals(ItemReference.Unregistered(notBlankStringOrFail("豆板醤")), saved.items.single().item)
+        assertEquals("豆板醤" to null, saved.items.single().let { it.displayName.value to it.itemId })
+    }
+
+    @Test
+    fun 選んだItemの表示名を追加したときのものとしてSessionに写す() = runTest {
+        recipeRepository.savedRecipes += mapoTofu
+        itemRepository.savedItems += greenOnion
+        addRecipe(mapoTofu.id, multiplierOrFail(1), listOf(ingredient(ItemInput.Selected(greenOnion.id))))
+        itemRepository.savedItems -= greenOnion
+        itemRepository.savedItems += greenOnion.copy(displayName = notBlankStringOrFail("白ネギ"))
+
+        addRecipe(mapoTofu.id, multiplierOrFail(1), listOf(ingredient(ItemInput.Selected(greenOnion.id))))
+
+        val saved = shoppingSessionRepository.savedSessions.last()
+        assertEquals(listOf("長ネギ", "白ネギ"), saved.items.map { it.displayName.value })
+    }
+
+    @Test
+    fun 選んだItemが見つからなければその材料の位置を返して何も保存しない() = runTest {
+        recipeRepository.savedRecipes += mapoTofu
+        itemRepository.savedItems += tofu
+
+        val result = addRecipe(
+            recipeId = mapoTofu.id,
+            multiplier = multiplierOrFail(1),
+            ingredients = listOf(
+                ingredient(ItemInput.Selected(tofu.id)),
+                ingredient(ItemInput.Selected(ItemId("item-deleted"))),
+            ),
+        )
+
+        assertEquals(AddRecipeToShoppingSessionResult.SelectedItemNoLongerExists(persistentListOf(1)), result)
+        assertEquals(emptyList(), shoppingSessionRepository.savedSessions)
     }
 
     @Test
     fun 表示名も分量もない材料は追加しない() = runTest {
         recipeRepository.savedRecipes += mapoTofu
+        itemRepository.savedItems += tofu
 
         addRecipe(
             recipeId = mapoTofu.id,

@@ -63,7 +63,7 @@ erDiagram
     ShoppingSession ||--o{ SessionItem : "has"
     SessionRecipe ||--o{ SessionRecipeIngredient : "requires"
     SessionItem ||--o{ SessionRecipeIngredient : "referenced by"
-    Item |o--o{ SessionItem : "referenced by (Registered only)"
+    Item |o..o{ SessionItem : "linked (navigation only)"
     Recipe ||..o{ SessionRecipe : "source (navigation only)"
 
     Recipe {
@@ -99,7 +99,8 @@ erDiagram
 
     SessionItem {
         SessionItemId id
-        ItemReference item
+        NotBlankString displayName
+        ItemId itemId
         ManualAddition manualAddition
     }
 
@@ -113,8 +114,9 @@ erDiagram
 - 材料（RecipeIngredient）は、Recipe のコンテキストにおいて「対象の Item をどう使うか」を保持する中間モデル
 - Session 内の材料（SessionRecipeIngredient）も、ShoppingSession のコンテキストにおいて同様の責務を担う。分量を保持するのは特別なスナップショット用途ではなく、Recipe 側の中間モデルと同様の自然な責務である
 - 分量（`Amount`）は数量（`Quantity`）と入力形式（`QuantityNotation`）と省略可能な単位（`AmountUnit`）の組。材料は分量ごと省略できる
-- Item の参照（`ItemReference`）は、登録済みの Item を指す（`Registered`）か、表示名しか分からない（`Unregistered`）かを表す Item ドメインの型。SessionItem がこれを使う。材料の入力では、名前があることを確かめてからこれにする（「UseCase の方針」参照）
-- SessionItem は、Item を指すか、Session 限定の品目の表示名を持つ。Session 限定の品目は Item を作らず、Session と同じ寿命を持つ（[spec.md](spec.md#item)）
+- Item の参照（`ItemReference`）は、登録済みの Item を指す（`Registered`）か、表示名しか分からない（`Unregistered`）かを表す Item ドメインの型。Recipe の保存で、材料の表示名を既存の Item と照らすときに使う。材料の入力では、名前があることを確かめてからこれにする（「UseCase の方針」参照）
+- SessionItem は表示名を持つ。Item から作った品目は、Item へのつながり（`itemId`）も持つ。表示名は Recipe を追加したときに Item から写し、その後の Item の変更は反映しない。`itemId` は Item の画面への移動などの利便性のためのもので、Session の中身は Item に依存しない（[spec.md](spec.md#shoppingsession)）
+- `itemId` のない SessionItem が Session 限定の品目。Item を作らず、Session と同じ寿命を持つ（[spec.md](spec.md#item)）
 - 状態（`SessionState`）は `Active` と `Completed(completedAt)`。完了日時は完了した Session だけが持つ
 - 手動追加は、SessionItem 内で省略可能（nullable）な `ManualAddition` として保持し、さらにその中に省略可能な分量を持たせる（2段階の nullable）。`ManualAddition` 自体が null であれば手動追加されていないことを示し、分量が null であれば「数量指定なしで手動追加された」ことを意味する
   - 単なる参照の有無だけでは、同一の Item が Recipe にも含まれている場合に手動追加分と区別できず、Recipe を除外した際に手動追加した行を残せなくなる
@@ -127,8 +129,8 @@ erDiagram
 - Recipe は集約ルート。材料の一覧を保持し、並び順はリストの順序に従う
 - 材料の行（RecipeIngredient・SessionRecipeIngredient）は ID を持たない。行を1つだけ指す操作が今は無く、行は一覧の中の位置で区別できるため。行を指す操作（Session に追加した後の行単位の編集、合算した品目の品目単位の編集など）を作るときは、行 ID を戻す。保存のときに行をどう識別するかはデータ層で決める
 - ShoppingSession は集約ルート。内部に SessionRecipe・SessionRecipeIngredient・SessionItem を保持する。Session 外部と関連を持つのは ItemId と元 Recipe の RecipeId のみとする
-- 1つの Session 内において、同一 Item を参照する SessionItem は最大1件（一意）。同じ表示名の Session 限定の品目も最大1件
-- Session 限定の品目の表示名は、空白だけにできない
+- 1つの Session 内において、Item へのつながりと表示名がどちらも同じ SessionItem は最大1件（一意）。Item の rename の後に同じ Item から追加した分は、表示名が違うので別の SessionItem になる
+- SessionItem の表示名は、空白だけにできない
 - SessionRecipeIngredient が参照可能なのは、同一 Session 内の SessionItem に限る
 - Recipe 由来の参照も手動追加の指定も存在しない SessionItem は保持しない（除外設定された材料行からの参照も有効な参照としてカウントする）
 - SessionRecipe・SessionItem の ID は Session 全体で重複しない
@@ -160,7 +162,7 @@ erDiagram
 - 「下書き」や「利用可能」といったユーザーの選択値は、UI 層からの引数として受け取る
 - 入力フォームの都合から来るルールのうち、表示名がなく分量がある材料を不正とする判定は、UseCase の入力の型（`IngredientInput`）に持たせる。製品全体で一貫するルール（数量がなければ分量なし）は domain（`Amount.ofOrNull`）に置く
   - `IngredientInput` は、Recipe の作成・編集と、Session への Recipe の追加で共通して使う
-  - 材料の品目は、既存の Item を選んだか（`ItemInput.Selected`）、文字を打ったか（`ItemInput.Typed`。空白もありうる）を、入力のまま受け取る。打たれた文字は UseCase の中で `NotBlankString` にし、名前があるときだけ `ItemReference` にする。名前がない材料は、そこで記録から外す
+  - 材料の品目は、既存の Item を選んだか（`ItemInput.Selected`）、文字を打ったか（`ItemInput.Typed`。空白もありうる）を、入力のまま受け取る。打たれた文字は UseCase の中で `NotBlankString` にし、名前があるときだけ、Recipe の保存では `ItemReference` に、Session への追加では Session に写す表示名にする。名前がない材料は、そこで記録から外す
   - 入力の段階で `ItemReference` にしない（名前がない行を null で受け取らない）のは、null が「何もない」ではなく「空白を打った」という経緯を背負い、`ItemReference` の分類（`Registered` / `Unregistered`）に紛れ込むためである
 - 1つのトランザクションでは、1つの集約だけを変更することを原則とする。Recipe の作成・編集は例外で、材料の入力と同時に新しい Item を作るという UI の都合から、新しい Item と Recipe を `TransactionRunner` で1つのトランザクションにまとめる。集約の境界は変えない（Item は複数の Recipe や Session から共有され、寿命も Recipe と異なるため）
   - 取り消すかどうかは、使う側が `TransactionScope.rollback` で指示する。Repository は失敗を例外ではなく `Outcome.Failure` で返すため、`TransactionRunner` が結果を見て自動で取り消すことはしない
@@ -205,7 +207,6 @@ erDiagram
 新しい表示名の Item は Recipe の保存時に一緒に保存し、Item 作成 UseCase は呼ばずに `ItemRepository` を直接使う。
 後から「Item だけを先に保存するボタン」を設ける場合は、Recipe がなく Item だけがある状態が認められているため、そのボタンを Item 作成 UseCase に繋げばよい。
 材料を Item に結び付ける処理（`resolveIngredients`）は、作成と編集で共通にしている。
-表示名を既存の Item と照らす処理（`linkToExistingItem`）は、Session への Recipe の追加とも共通にしている。
 写真も同一の UseCase に含める想定であるが、実際に統合するかどうかは写真機能の実装時に決定する。
 なお、写真機能をどの段階で実装するかは現時点では未定である（詳細は [photo.md](photo.md) 参照）。
 
@@ -221,6 +222,7 @@ AI による重複候補判定（13）は後から差し込む。
 倍率の計算はこの UseCase の外（追加の画面に出す分量を作るところ）で行い、UseCase は倍率を記録として残すだけである。
 倍率の計算（`Quantity.times`）は、桁あふれすると null を返す。null の扱いと、計算をどこに置くか（UI か、表示用の分量を作る UseCase か）は、画面を作るときに決める。
 追加のたびに Session 内の Recipe を1つ作り、同じ品目の SessionItem は使い回す。この組み立ては `ShoppingSession.withAddedRecipe` が行い、UseCase は入力の検証、Recipe の取得、名前と既存の Item との照合、保存を受け持つ。
+既存の Item を選んだ材料は、Item から表示名を写す。選んだ Item が見つからなければ、何も追加せずに材料の位置を返す（今は Item の削除がないので起きない）。
 
 ## AI / ML
 
@@ -257,7 +259,7 @@ PoC は完了済み。
 - Item の表示名の一致判定（検索の部分一致、作成時の重複検知の完全一致）をどこで行うか。現時点では、どちらも Repository から全件を読み込み、UseCase で絞り込んでいる。Recipe の作成・編集と Session への Recipe の追加の UseCase も、材料の新しい表示名を既存の Item と照らすために、Item を全件読み込んでいる。表示名の一致の規則（何を同じ名前とみなすか）を domain に置くかも、あわせて決める。データ層の実装時に、表示名を Repository へ渡す形へ移すかを、検索と作成で揃えて決める。Web 版では全件の通信が重くなること、SQLite の `LIKE` は英字の大文字・小文字を区別せず `%` や `_` のエスケープも必要なことを踏まえる。移した場合も、前後の空白の除去と空入力の扱いは今の場所（表示名は `NotBlankString`、検索語は UseCase）に残す。あわせて、同じ表示名の Item の作成が同時に行われた場合の重複を、データ層でどう防ぐかも決める（Room の `@Transaction` で足りるか、一意制約が要るかなど）
 - Recipe の保存時や Session への Recipe の追加時に既存の Item を使ったことを、材料の行単位で返す必要があるか。現時点では、使った既存の Item の一覧だけを返している。UI の実装時に確認する
 - 保存先から集約を読み戻す方法。ShoppingSession のコンストラクタは private なので、データ層の実装時に、中身を受け取って「集約と不変条件」の規則を確かめ、満たせば集約を作り、満たさなければ null を返す生成関数を domain に足す
-- SessionItem の ID を残すか。1つの Session の中では SessionItem は `ItemReference` で一意に決まるので、行が `ItemReference` で品目を指せば ID を外せる。ただし、品目の指し方が変わる操作（Session 限定の品目を Item として登録する、Item を統合する）では、ID がある方が行を書き換えずに済む。それらの操作を決めるときにあわせて見直す
+- SessionItem の ID を残すか。1つの Session の中では SessionItem は Item へのつながりと表示名の組で一意に決まるので、行がその組で品目を指せば ID を外せる。ただし、品目の指し方が変わる操作（Session 限定の品目を Item として登録する、Item を統合する）では、ID がある方が行を書き換えずに済む。それらの操作を決めるときにあわせて見直す
 - 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合は、呼び出し側が個別に対処できることがないため、意味としては Repository の `Unexpected` に当たる。ただし `Unexpected` の中身が `Throwable` に固定されているので、データ層の実装時に見直す。ログもデータ層で残し、仕組みはそのときに決める。集計（11）での桁あふれは、spec の「互換性のない単位を無理に1つの数量へ変換しない」と同じく「1つの数量にまとめられない」状態として、集計の結果の一部で表す方向で検討する。表示の仕方は spec の範囲なので、11 で決める
 - 同じ端末で Session への追加が同時に走った場合（連打など）の扱い。UseCase は進行中の Session を読んでから保存するため、片方の追加が失われるか、データ層の一意制約で失敗しうる。データ層の実装時に決める
 - UseCase の結果を画面向けに変換する層を設けるか（Presentation の層を挟むか、ViewModel が直接扱うか）。UI の実装時に決める

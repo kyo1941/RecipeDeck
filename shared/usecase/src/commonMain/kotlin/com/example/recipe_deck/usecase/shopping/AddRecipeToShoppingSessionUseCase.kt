@@ -6,7 +6,6 @@ import com.example.recipe_deck.domain.NotBlankString
 import com.example.recipe_deck.domain.Outcome
 import com.example.recipe_deck.domain.amount.Multiplier
 import com.example.recipe_deck.domain.item.Item
-import com.example.recipe_deck.domain.item.ItemReference
 import com.example.recipe_deck.domain.item.ItemRepository
 import com.example.recipe_deck.domain.item.ItemRepositoryFailure
 import com.example.recipe_deck.domain.recipe.RecipeId
@@ -18,7 +17,6 @@ import com.example.recipe_deck.domain.shopping.ShoppingSession
 import com.example.recipe_deck.domain.shopping.ShoppingSessionRepository
 import com.example.recipe_deck.domain.shopping.ShoppingSessionRepositoryFailure
 import com.example.recipe_deck.usecase.ingredient.ItemInput
-import com.example.recipe_deck.usecase.item.linkToExistingItem
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.time.Clock
@@ -47,10 +45,19 @@ class AddRecipeToShoppingSessionUseCase(
         if (recipe.status == RecipeStatus.DRAFT) return AddRecipeToShoppingSessionResult.RecipeIsDraft
 
         val existingItems = when (val found = itemRepository.findAll()) {
-            is Outcome.Success -> found.value.associateBy { it.displayName }
+            is Outcome.Success -> found.value
             is Outcome.Failure -> return found.error.toAddRecipeToShoppingSessionResult()
         }
-        val existingItemsById = existingItems.values.associateBy { it.id }
+        val existingItemsById = existingItems.associateBy { it.id }
+        val existingItemsByDisplayName = existingItems.associateBy { it.displayName }
+
+        ingredients.indices
+            .filter { index ->
+                val item = ingredients[index].ingredient.item
+                item is ItemInput.Selected && item.itemId !in existingItemsById
+            }
+            .takeIf { it.isNotEmpty() }
+            ?.let { return AddRecipeToShoppingSessionResult.SelectedItemNoLongerExists(it.toImmutableList()) }
 
         val session = when (val found = shoppingSessionRepository.findActive()) {
             is Outcome.Success -> found.value ?: ShoppingSession.create(clock.now())
@@ -59,16 +66,18 @@ class AddRecipeToShoppingSessionUseCase(
 
         val matchedExistingItems = mutableSetOf<Item>()
         val addedIngredients = ingredients.mapNotNull { input ->
-            val item = when (val inputItem = input.ingredient.item) {
-                is ItemInput.Selected -> ItemReference.Registered(inputItem.itemId)
+            val (displayName, itemId) = when (val inputItem = input.ingredient.item) {
+                is ItemInput.Selected -> {
+                    val item = existingItemsById[inputItem.itemId] ?: return@mapNotNull null
+                    item.displayName to item.id
+                }
                 is ItemInput.Typed -> {
                     val displayName = NotBlankString.of(inputItem.text) ?: return@mapNotNull null
-                    ItemReference.Unregistered(displayName).linkToExistingItem(existingItems).also { linked ->
-                        if (linked is ItemReference.Registered) existingItemsById[linked.itemId]?.let { matchedExistingItems += it }
-                    }
+                    val existingItem = existingItemsByDisplayName[displayName]?.also { matchedExistingItems += it }
+                    displayName to existingItem?.id
                 }
             }
-            AddedRecipeIngredient(item, input.ingredient.amount, input.isExcluded)
+            AddedRecipeIngredient(displayName, itemId, input.ingredient.amount, input.isExcluded)
         }
 
         val updatedSession = session.withAddedRecipe(recipe.id, recipe.name, multiplier, addedIngredients)
@@ -98,6 +107,7 @@ sealed interface AddRecipeToShoppingSessionResult {
     data class Added(val matchedExistingItems: ImmutableList<Item>) : AddRecipeToShoppingSessionResult
     data object RecipeIsDraft : AddRecipeToShoppingSessionResult
     data object RecipeNoLongerExists : AddRecipeToShoppingSessionResult
+    data class SelectedItemNoLongerExists(val ingredientIndexes: ImmutableList<Int>) : AddRecipeToShoppingSessionResult
     data class IngredientDisplayNameRequired(val ingredientIndexes: ImmutableList<Int>) : AddRecipeToShoppingSessionResult
     data class Unexpected(val cause: Throwable) : AddRecipeToShoppingSessionResult
 }

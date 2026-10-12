@@ -45,8 +45,8 @@ MVP ではユーザー自身が所有する Recipe を前提とし、公開・�
 | 進行中／完了 | `SessionState.Active` / `Completed` | ShoppingSession の状態 |
 | Session 内の Recipe | `SessionRecipe` | Session に追加した Recipe のコピー |
 | Session 内の材料 | `SessionRecipeIngredient` | Session 内の Recipe が、ある Item をどれだけ必要とするか |
-| Session 内の Item | `SessionItem` | Session 内の品目1つ（買い物リストの1行の元）。Item か Session 限定の品目を指す |
-| Session 限定の品目 | `ItemReference.Unregistered`（`SessionItem` 内） | Item を作らず、Session の中にだけ表示名を持つ品目。Session と同じ寿命を持つ |
+| Session 内の Item | `SessionItem` | Session 内の品目1つ（買い物リストの1行の元）。表示名を持ち、Item から作ったものは Item へのつながりも持つ |
+| Session 限定の品目 | Item へのつながりのない `SessionItem` | Item を作らず、Session の中にだけ表示名を持つ品目。Session と同じ寿命を持つ |
 | 手動追加 | `ManualAddition` | Recipe を経由せず Session に直接追加した項目 |
 | 今回は不要 | `SessionRecipeIngredient.isExcluded` | Recipe 本体は変更せず、今回に限り材料を除外すること |
 
@@ -113,8 +113,9 @@ Recipe や ShoppingSession に所属しない、**買い物対象の同一性**�
 - 履歴として複数保持できる
 - 通常の UI 操作において active な Session は最大1件
 - 状態は active / completed の2種類。破棄する買い物リストは履歴として残さず削除する
-- completed な Session は過去の買い物実績として扱い、Session へコピーした内容（Recipe 名・倍率・分量など）をそのまま保持する。Item は ItemId で参照するため、Item の表示名を固定（スナップショット化）するかどうかは未確定（[未確定事項](#未確定事項)）
-- 進行中の Session では、Item の表示名変更（rename）が反映される（Session は Item を ItemId で参照しており、表示名自体は保持しないため）。Session 限定の品目は、表示名を Session 内に持つ
+- completed な Session は過去の買い物実績として扱い、Session へコピーした内容（Recipe 名・Item の表示名・倍率・分量など）をそのまま保持する
+- Session 内のデータは、Recipe や Item から独立したスナップショットとする。Session の外での操作（Item の表示名変更（rename）など）は、進行中・完了のどちらの Session にも反映しない。反映させたい場合は、通知やユーザーの選択を通す操作を別に設ける
+- Session が持つ Item の ID は、Item の画面への移動など、利便性のためのつながりとして持つ。Session の表示や中身は Item に依存しない
 - 作成日時と完了日時を保持する。完了日時を持つのは completed な Session のみ。作成日時は Session 作成時のタイムスタンプとする
 - Recipe を Session へ追加した後は、元の Recipe が編集されても自動同期しない
 - Session 内のデータは Session 完結とし、元の Recipe と密結合させない
@@ -161,8 +162,10 @@ Recipe を Session へ追加するとき、Session 側へ必要な情報をコ�
 
 - 元の Recipe を編集しても既存の Session には影響しない
 - Recipe が後から変更・削除されても、進行中 Session の整合性を損なわない
-- Session へコピーするのは、Recipe 名・追加時の倍率・倍率適用後の分量
-- Item は ItemId で参照し、表示名はコピーしない。Session 限定の品目は、表示名を Session 内に持つ
+- Session へコピーするのは、Recipe 名・Item の表示名・追加時の倍率・倍率適用後の分量
+- Item から作った品目は、Item の表示名もコピーし、Item へのつながりとして ItemId を持つ。Session 限定の品目は、表示名だけを持つ
+- Session 内で同じ品目とみなすのは、Item へのつながりと表示名がどちらも同じものだけとする。Item の表示名を変更した後に同じ Item を含む Recipe を追加すると、表示名が違うので別の品目になる
+- 既存の Item を選んだ材料は、Item から表示名を写す。選んだ Item が見つからなければ、何も追加せずに該当する材料の位置を返す
 - Session 内の材料は倍率適用後の分量を保持する。これにより、Session 内で数量を修正した際に、倍率適用前後のどちらの値を操作しているかが曖昧になるのを防ぐ
 - 倍率を掛けた後の分量は、元の材料の入力形式（分数か小数か）を引き継ぐ
 - 割り切れない値や長い小数の丸めは表示するときに行い、分量は分数のまま持つ。桁数と、打ち切りか四捨五入かは、表示を作るときに決める
@@ -291,12 +294,12 @@ AI の応答が遅い場合や利用しない場合は、該当 UseCase への�
   - `ShoppingSession.create` は空の Session を返すが、今は Recipe の追加で `withAddedRecipe` と組み合わせてだけ使い、空のまま保存する操作はない。`create` があることは、空の Session を有効とする決定ではない
 - 追加した後に、Session 内の Recipe を単位として材料を編集できるようにするか。除外した材料を後から有効に戻せるようにするかも合わせて決める
 - 買い物リスト上で品目単位に数量を変える・削除するとき、その品目が複数の材料の行から合算されていたら、どの行をどう変えるか。今のドメインには、合算した後の品目単位の変更を表す場所がない。リストの編集を作るときに決める
-- Session 限定の品目を Item として登録できるようにするか。今は Item にしない。設ける場合は、ユーザーに Item として登録するかを尋ねる導線とし、登録しない選択肢も残す。登録したときは、その SessionItem の参照を登録した Item に付け替えれば、Session 内の材料の行はそのまま使える
+- Session 限定の品目を Item として登録できるようにするか。今は Item にしない。設ける場合は、ユーザーに Item として登録するかを尋ねる導線とし、登録しない選択肢も残す。登録したときは、その SessionItem に登録した Item へのつながりを持たせれば、Session 内の材料の行はそのまま使える。ただし、同じ Item へのつながりと同じ表示名を持つ品目が既に Session にある場合の扱い（まとめるか）は、そのときに決める
 - Session 限定の品目がある Session で、同じ表示名の Item が後から作られた場合、その後の追加で Item を指す行と Session 限定の品目が同じ名前で並ぶ。今は許容する。追加のたびに Session 限定の品目も既存の Item と照らし直す対応を後から足せる（足した時点で完了済みの Session は直らない）
 - MVP に merge を含めるか
 - 統合（merge）後の旧 Item ID の扱い（redirect / tombstone、undo を含む）
-- Item の削除を提供するか。提供する場合、Recipe や Session から使われている Item をどう扱うか。あわせて、Recipe の保存時に、材料で選ばれた既存の Item が存在するかを確かめるかも決める（現時点では、削除の手段がないため確かめていない）
-- completed な Session において、Item の表示名を固定（スナップショット化）するかどうか（rename・merge の影響）。買い物履歴画面の実装時に決定する
+- Item の削除を提供するか。提供する場合、Recipe から使われている Item をどう扱うか。Session は表示名を持つので、Item を削除しても Session の中身は変わらない。あわせて、Recipe の保存時に、材料で選ばれた既存の Item が存在するかを確かめるかも決める（現時点では、削除の手段がないため確かめていない。Session への Recipe の追加では、表示名を写すために確かめている）
+- Item の rename を、その Item を使う Recipe のどれに適用するかを、ユーザーが選べるようにするか。例えば、Recipe の材料から rename したときは、その Recipe だけに適用するかを選べるようにする。自分の操作が、知らないところのデータを変えないようにするため。rename を作るときに決める
 
 ## 参照
 

@@ -7,8 +7,8 @@ import com.example.recipe_deck.domain.amount.AmountUnit
 import com.example.recipe_deck.domain.amount.QuantityNotation
 import com.example.recipe_deck.domain.amount.multiplierOrFail
 import com.example.recipe_deck.domain.amount.quantityOrFail
+import com.example.recipe_deck.domain.NotBlankString
 import com.example.recipe_deck.domain.item.ItemId
-import com.example.recipe_deck.domain.item.ItemReference
 import com.example.recipe_deck.domain.notBlankStringOrFail
 import com.example.recipe_deck.domain.recipe.RecipeId
 import kotlin.test.Test
@@ -22,15 +22,17 @@ import kotlin.time.Instant
 class ShoppingSessionTest {
     private val createdAt = Instant.parse("2026-10-04T10:00:00Z")
     private val mapoTofu = RecipeId("mapo-tofu")
-    private val greenOnion = ItemReference.Registered(ItemId("green-onion"))
-    private val doubanjiang = ItemReference.Unregistered(notBlankStringOrFail("豆板醤"))
+    private val greenOnionId = ItemId("green-onion")
+    private val greenOnion = notBlankStringOrFail("長ネギ")
+    private val doubanjiang = notBlankStringOrFail("豆板醤")
     private val onePiece = Amount(quantityOrFail(1), QuantityNotation.FRACTION, AmountUnit.PIECE)
 
     private fun ingredient(
-        item: ItemReference,
+        displayName: NotBlankString,
+        itemId: ItemId? = null,
         amount: Amount? = onePiece,
         isExcluded: Boolean = false,
-    ) = AddedRecipeIngredient(item, amount, isExcluded)
+    ) = AddedRecipeIngredient(displayName, itemId, amount, isExcluded)
 
     private fun ShoppingSession.withAddedMapoTofu(vararg ingredients: AddedRecipeIngredient) =
         withAddedRecipe(mapoTofu, notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), ingredients.toList())
@@ -47,21 +49,22 @@ class ShoppingSessionTest {
 
     @Test
     fun Recipeを足すと元のRecipeと名前と倍率と材料を写したSession内のRecipeができる() {
-        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion))
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion, greenOnionId))
 
         val recipe = session.recipes.single()
         val item = session.items.single()
         assertEquals(mapoTofu, recipe.sourceRecipeId)
         assertEquals("麻婆豆腐", recipe.recipeName.value)
         assertEquals(multiplierOrFail(2), recipe.multiplier)
-        assertEquals(greenOnion, item.item)
+        assertEquals(greenOnion, item.displayName)
+        assertEquals(greenOnionId, item.itemId)
         assertNull(item.manualAddition)
         assertEquals(listOf(SessionRecipeIngredient(item.id, onePiece, isExcluded = false)), recipe.ingredients)
     }
 
     @Test
     fun 同じItemの材料が複数あってもSessionItemは1つにまとめる() {
-        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion), ingredient(greenOnion, amount = null))
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion, greenOnionId), ingredient(greenOnion, greenOnionId, amount = null))
 
         val item = session.items.single()
         assertEquals(listOf(item.id, item.id), session.recipes.single().ingredients.map { it.sessionItemId })
@@ -71,12 +74,31 @@ class ShoppingSessionTest {
     fun 同じ表示名のSession限定の品目はSessionItemを1つにまとめる() {
         val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(doubanjiang), ingredient(doubanjiang))
 
-        assertEquals(doubanjiang, session.items.single().item)
+        val item = session.items.single()
+        assertEquals(doubanjiang, item.displayName)
+        assertNull(item.itemId)
+    }
+
+    @Test
+    fun 同じItemでも表示名が違えば別のSessionItemにする() {
+        val session = ShoppingSession.create(createdAt)
+            .withAddedMapoTofu(ingredient(greenOnion, greenOnionId))
+            .withAddedMapoTofu(ingredient(notBlankStringOrFail("白ネギ"), greenOnionId))
+
+        assertEquals(listOf("長ネギ", "白ネギ"), session.items.map { it.displayName.value })
+        assertEquals(listOf(greenOnionId, greenOnionId), session.items.map { it.itemId })
+    }
+
+    @Test
+    fun 同じ表示名でもItemとSession限定の品目は別のSessionItemにする() {
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion, greenOnionId), ingredient(greenOnion))
+
+        assertEquals(listOf(greenOnionId, null), session.items.map { it.itemId })
     }
 
     @Test
     fun 同じRecipeを2回足すと別々のSession内のRecipeになり同じ品目のSessionItemを使い回す() {
-        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion)).withAddedMapoTofu(ingredient(greenOnion))
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion, greenOnionId)).withAddedMapoTofu(ingredient(greenOnion, greenOnionId))
 
         val item = session.items.single()
         assertEquals(2, session.recipes.size)
@@ -86,7 +108,7 @@ class ShoppingSessionTest {
 
     @Test
     fun 除外した材料もSessionItemを指す行として残す() {
-        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion, isExcluded = true))
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion, greenOnionId, isExcluded = true))
 
         val recipeIngredient = session.recipes.single().ingredients.single()
         assertEquals(session.items.single().id, recipeIngredient.sessionItemId)
