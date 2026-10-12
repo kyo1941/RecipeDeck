@@ -19,16 +19,17 @@ data class ShoppingSession private constructor(
     val recipes: ImmutableList<SessionRecipe>,
     val items: ImmutableList<SessionItem>,
 ) {
+    /** Session は Item から独立したスナップショットなので、同じ品目かどうかを、Session が持つ表示名と Item へのつながりの組だけで決める。 */
     fun withAddedRecipe(
         sourceRecipeId: RecipeId,
         recipeName: NotBlankString,
         multiplier: Multiplier,
         ingredients: List<AddedRecipeIngredient>,
     ): ShoppingSession {
-        val sessionItems = items.associateByTo(mutableMapOf()) { it.item }
+        val sessionItems = items.associateByTo(mutableMapOf()) { it.displayName to it.itemId }
         val recipeIngredients = ingredients.map { ingredient ->
-            val sessionItem = sessionItems.getOrPut(ingredient.item) {
-                SessionItem(SessionItemId.generate(), ingredient.item, manualAddition = null)
+            val sessionItem = sessionItems.getOrPut(ingredient.displayName to ingredient.itemId) {
+                SessionItem(SessionItemId.generate(), ingredient.displayName, ingredient.itemId, manualAddition = null)
             }
             SessionRecipeIngredient(
                 sessionItemId = sessionItem.id,

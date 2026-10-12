@@ -1,11 +1,13 @@
 package com.example.recipe_deck.domain.shopping
 
+import com.example.recipe_deck.domain.NotBlankString
 import com.example.recipe_deck.domain.amount.Amount
-import com.example.recipe_deck.domain.item.ItemReference
+import com.example.recipe_deck.domain.item.ItemId
 
 data class SessionItem(
     val id: SessionItemId,
-    val item: ItemReference,
+    val displayName: NotBlankString,
+    val itemId: ItemId?,
     val manualAddition: ManualAddition?,
 )
 
