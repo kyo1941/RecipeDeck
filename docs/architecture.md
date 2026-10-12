@@ -121,12 +121,14 @@ erDiagram
   - 単なる参照の有無だけでは、同一の Item が Recipe にも含まれている場合に手動追加分と区別できず、Recipe を除外した際に手動追加した行を残せなくなる
   - 3パターンの sealed interface で表現しようとすると「手動追加」という概念が型定義から失われ、手動追加に属性が追加された際に重複定義が生じる
 - ManualSessionItem や RecipeSessionItem のように、由来ごとに型を増やさない
-- 統合済みの買い物項目は永続化せず、表示のたびに集計する（[spec.md](spec.md#買い物リスト表示)）
+- 買い物リストは永続化せず、`ShoppingSession.toShoppingList()` が表示のたびに Session の中身から作る。SessionItem ごとに買い物項目（`ShoppingListItem`）を作り、その品目を必要とする Session 内の材料と手動追加を内訳（`ShoppingListItemSource`）として集める。同じ品目の分量を足すのは表示で行い、domain は足さない（[spec.md](spec.md#買い物リスト表示)）
+  - 合計と内訳のどちらを見せるか、除外した材料や、材料がすべて除外された品目をどう見せるかは、表示側の責務とする。domain は除外の有無を内訳に残すだけで、見せ方を決めない
 
 ### 集約と不変条件
 
 - Recipe は集約ルート。材料の一覧を保持し、並び順はリストの順序に従う
-- 材料の行（RecipeIngredient・SessionRecipeIngredient）は ID を持たない。行を1つだけ指す操作が今は無く、行は一覧の中の位置で区別できるため。行を指す操作（Session に追加した後の行単位の編集、合算した品目の品目単位の編集など）を作るときは、行 ID を戻す。保存のときに行をどう識別するかはデータ層で決める
+- 材料の行（RecipeIngredient・SessionRecipeIngredient）は ID を持たない。行を1つだけ指す操作が今は無く、行は一覧の中の位置で区別できるため。行を指す操作（Session に追加した後の行単位の編集、買い物項目単位の編集など）を作るときは、行 ID を戻す。保存のときに行をどう識別するかはデータ層で決める
+- Session の分量は、Recipe 由来のものを SessionRecipe の下（SessionRecipeIngredient）に、手動追加を SessionItem の下（ManualAddition）に持つ。どちらも寿命の持ち主の下に置くためで、Recipe 由来の分量は追加1回分の Recipe と一緒に生まれて消える。買い物リストでは、どちらも内訳の1件として同列に並べる。品目単位の操作（買い物リスト上の品目単位の数量変更・削除）が Recipe 単位の操作より重くなったら、分量を品目の下にまとめる形（Recipe 由来か手動追加かを sealed interface で表す）への見直しを検討する
 - ShoppingSession は集約ルート。内部に SessionRecipe・SessionRecipeIngredient・SessionItem を保持する。Session 外部と関連を持つのは ItemId と元 Recipe の RecipeId のみとする
 - 1つの Session 内において、Item へのつながりと表示名がどちらも同じ SessionItem は最大1件（一意）。Item の rename の後に同じ Item から追加した分は、表示名が違うので別の SessionItem になる
 - SessionItem の表示名は、空白だけにできない
@@ -223,6 +225,11 @@ AI による重複候補判定（13）は後から差し込む。
 追加のたびに Session 内の Recipe を1つ作り、同じ品目の SessionItem は使い回す。この組み立ては `ShoppingSession.withAddedRecipe` が行い、UseCase は入力の検証、Recipe の取得、名前と既存の Item との照合、保存を受け持つ。
 既存の Item を選んだ材料は、Item から表示名を写す。選んだ Item が見つからなければ、何も追加せずに材料の位置を返す（今は Item の削除がないので起きない）。
 
+11 は、進行中の Session の買い物リストを返す UseCase（`ShowShoppingListUseCase`）を実装済み。
+進行中の Session がなければ、他に何も読まずに `NoActiveSession` を返す。
+買い物リストは domain の `ShoppingSession.toShoppingList()` が作り、UseCase は Session を読むだけである（表示名は Session が持つので、Item は読まない）。
+手動追加のある Session を作る手段（手動追加の操作か、保存先からの読み戻し）がまだないため、手動追加の内訳はテストで確かめていない。手段ができたら、手動追加が内訳の最後に並ぶことと、手動追加だけの品目も買い物項目になることを、`toShoppingList()` を通して確かめる。
+
 ## AI / ML
 
 PoC は完了済み。
@@ -259,7 +266,7 @@ PoC は完了済み。
 - Recipe の保存時や Session への Recipe の追加時に既存の Item を使ったことを、材料の行単位で返す必要があるか。現時点では、使った既存の Item の一覧だけを返している。UI の実装時に確認する
 - 保存先から集約を読み戻す方法。ShoppingSession のコンストラクタは private なので、データ層の実装時に、中身を受け取って「集約と不変条件」の規則を確かめ、満たせば集約を作り、満たさなければ null を返す生成関数を domain に足す
 - SessionItem の ID を残すか。1つの Session の中では SessionItem は Item へのつながりと表示名の組で一意に決まるので、行がその組で品目を指せば ID を外せる。ただし、品目の指し方が変わる操作（Session 限定の品目を Item として登録する、Item を統合する）では、ID がある方が行を書き換えずに済む。それらの操作を決めるときにあわせて見直す
-- 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合は、呼び出し側が個別に対処できることがないため、意味としては Repository の `Unexpected` に当たる。ただし `Unexpected` の中身が `Throwable` に固定されているので、データ層の実装時に見直す。ログもデータ層で残し、仕組みはそのときに決める。集計（11）での桁あふれは、spec の「互換性のない単位を無理に1つの数量へ変換しない」と同じく「1つの数量にまとめられない」状態として、集計の結果の一部で表す方向で検討する。表示の仕方は spec の範囲なので、11 で決める
+- 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合は、呼び出し側が個別に対処できることがないため、意味としては Repository の `Unexpected` に当たる。ただし `Unexpected` の中身が `Throwable` に固定されているので、データ層の実装時に見直す。ログもデータ層で残し、仕組みはそのときに決める。買い物リストの分量は表示で足すので、domain の買い物リストでは桁あふれは起きない。表示で足して桁があふれたときは、足さずに並べる（[spec.md](spec.md#買い物リスト表示)）
 - 同じ端末で Session への追加が同時に走った場合（連打など）の扱い。UseCase は進行中の Session を読んでから保存するため、片方の追加が失われるか、データ層の一意制約で失敗しうる。データ層の実装時に決める
 - UseCase の結果を画面向けに変換する層を設けるか（Presentation の層を挟むか、ViewModel が直接扱うか）。UI の実装時に決める
 - 別名（alias）の具体的な永続化構造
