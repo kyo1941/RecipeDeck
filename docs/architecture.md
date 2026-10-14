@@ -240,8 +240,11 @@ AI による重複候補判定（13）は後から差し込む。
 
 11 は、進行中の Session の買い物リストを返す UseCase（`ShowShoppingListUseCase`）を実装済み。
 進行中の Session がなければ、他に何も読まずに `NoActiveSession` を返す。
-買い物リストは domain の `ShoppingSession.toShoppingList()` が作り、UseCase は Session を読むだけである（表示名は Session が持つので、Item は読まない）。
+買い物リストは domain の `ShoppingSession.toShoppingList()` が作り、UseCase は Session を読む（表示名は Session が持つので、Item は読まない。購入の記録を読むのは 12 で足した）。
 手動追加のある Session を作る手段（手動追加の操作か、保存先からの読み戻し）がまだないため、手動追加の内訳はテストで確かめていない。手段ができたら、手動追加が内訳の最後に並ぶことと、手動追加だけの品目も買い物項目になることを、`toShoppingList()` を通して確かめる。
+
+12 では、`ShowShoppingListUseCase` が、進行中の Session に続けてその Session の購入の記録を読み、購入済みの内訳 ID を `toShoppingList` に渡すようにした。
+購入の記録が読めなければ、買い物リストを返さずに `Unexpected` を返す。購入状態の見えない買い物リストを見せても解決にならないためである。購入の記録は Session と同じデータベースに置くので、購入の記録だけが読めない失敗は起きにくいと見ている。保存の具象を作るときに、起きうるかを確かめ、起きうるならこの扱いを見直す。
 
 ## AI / ML
 
