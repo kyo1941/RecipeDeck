@@ -63,6 +63,7 @@ erDiagram
     ShoppingSession ||--o{ SessionItem : "has"
     SessionRecipe ||--o{ SessionRecipeIngredient : "requires"
     SessionItem ||--o{ SessionRecipeIngredient : "referenced by"
+    SessionItem ||--o| ManualAddition : "has"
     Item |o..o{ SessionItem : "linked (navigation only)"
     Recipe ||..o{ SessionRecipe : "source (navigation only)"
 
@@ -101,10 +102,15 @@ erDiagram
         SessionItemId id
         NotBlankString displayName
         ItemId itemId
-        ManualAddition manualAddition
+    }
+
+    ManualAddition {
+        ShoppingListItemSourceId id
+        Amount amount
     }
 
     SessionRecipeIngredient {
+        ShoppingListItemSourceId id
         SessionItemId sessionItemId
         Amount amount
         boolean isExcluded
@@ -127,14 +133,18 @@ erDiagram
 ### 集約と不変条件
 
 - Recipe は集約ルート。材料の一覧を保持し、並び順はリストの順序に従う
-- 材料の行（RecipeIngredient・SessionRecipeIngredient）は ID を持たない。行を1つだけ指す操作が今は無く、行は一覧の中の位置で区別できるため。行を指す操作（Session に追加した後の行単位の編集、買い物項目単位の編集など）を作るときは、行 ID を戻す。保存のときに行をどう識別するかはデータ層で決める
+- Recipe の材料の行（RecipeIngredient）は ID を持たない。行を1つだけ指す操作が今は無く、行は一覧の中の位置で区別できるため。行を指す操作を作るときは、行 ID を戻す。保存のときに行をどう識別するかはデータ層で決める
+- Session 内の材料（SessionRecipeIngredient）と手動追加（ManualAddition）は、内訳の ID（`ShoppingListItemSourceId`）を持つ。購入済みチェックを内訳ごとに記録するときの鍵にするため
+  - Session 内の Recipe と品目の組を鍵にしないのは、1つの Recipe に同じ品目の行が複数あるとき（[spec.md](spec.md#recipe)）に、それらの行が1つのチェックを共有してしまうため
+  - 手動追加にも ID を持たせるのは、手動追加を消して足し直したときに、前のチェックが生き返らないようにするため
+  - 材料と手動追加で ID の型を分けないのは、購入の記録がどちらの内訳も区別せずに並べて持つため
 - Session の分量は、Recipe 由来のものを SessionRecipe の下（SessionRecipeIngredient）に、手動追加を SessionItem の下（ManualAddition）に持つ。どちらも寿命の持ち主の下に置くためで、Recipe 由来の分量は追加1回分の Recipe と一緒に生まれて消える。買い物リストでは、どちらも内訳の1件として同列に並べる。品目単位の操作（買い物リスト上の品目単位の数量変更・削除）が Recipe 単位の操作より重くなったら、分量を品目の下にまとめる形（Recipe 由来か手動追加かを sealed interface で表す）への見直しを検討する
 - ShoppingSession は集約ルート。内部に SessionRecipe・SessionRecipeIngredient・SessionItem を保持する。Session 外部と関連を持つのは ItemId と元 Recipe の RecipeId のみとする
 - 1つの Session 内において、Item へのつながりと表示名がどちらも同じ SessionItem は最大1件（一意）。Item の rename の後に同じ Item から追加した分は、表示名が違うので別の SessionItem になる
 - SessionItem の表示名は、空白だけにできない
 - SessionRecipeIngredient が参照可能なのは、同一 Session 内の SessionItem に限る
 - Recipe 由来の参照も手動追加の指定も存在しない SessionItem は保持しない（除外設定された材料行からの参照も有効な参照としてカウントする）
-- SessionRecipe・SessionItem の ID は Session 全体で重複しない
+- SessionRecipe・SessionItem の ID、および内訳の ID（Session 内の材料と手動追加）は、それぞれ Session 全体で重複しない
 - 完了日時は作成日時より過去であってはならない。完了の操作はまだ無い。端末の時計を戻すと正しい操作でも破れうるので、完了を拒むか時刻をそろえるかは、完了の操作を作るときに決める
 - ShoppingSession は `create`（空の進行中の Session）と `withAddedRecipe`（Recipe を追加した Session）でしか作れず、これらの操作が上の規則を満たすように組み立てる。手動追加と完了の操作はまだ無いので、手動追加のある Session と完了した Session は今は作られない
 - 「active な Session は最大1件」という不変条件は複数 Session にまたがる制約であるため、単一集約の境界内では担保できない。Repository より下の層（データ層）で保証する。UseCase は Session の ID を受け取らず、進行中の Session を探して使う
@@ -257,14 +267,14 @@ PoC は完了済み。
 
 - Repository の分け方
 - ローカルの保存方式（Room KMP など）と、プラットフォームごとの Repository の実装
-- Room のテーブル・主キー・インデックス。材料の行の主キー（行ごとの固有 ID か、所属と並び順か）もあわせて決める。domain の行は ID を持たない（「集約と不変条件」参照）
+- Room のテーブル・主キー・インデックス。Recipe の材料の行の主キー（行ごとの固有 ID か、所属と並び順か）もあわせて決める。domain の Recipe の材料の行は ID を持たない（「集約と不変条件」参照）
 - 購入済みチェック状態の永続化・保持方法（SavedStateHandle、Room の別の場所など）。KMP / CMP / iOS における挙動も調査した上で決定する。なお、Android の SavedStateHandle は、ユーザーによるアプリ終了や端末の再起動によって破棄される
 - Recipe の写真に関する未決定事項（詳細は [photo.md](photo.md) 参照）
 - Recipe 削除機能の実装時、編集画面からの保存によって削除済み Recipe を再作成しないようにするか。現時点では決めていない。今の実装は新規作成と同一の `save` メソッドで上書き保存する構成となっている
 - 変更がない状態での保存要求時にも永続化処理を行うかどうか。現時点では無条件で保存する実装となっており、将来のサーバー同期導入時に方針を決定する
 - Item の表示名の一致判定（検索の部分一致、作成時の重複検知の完全一致）をどこで行うか。現時点では、どちらも Repository から全件を読み込み、UseCase で絞り込んでいる。Recipe の作成・編集と Session への Recipe の追加の UseCase も、材料の新しい表示名を既存の Item と照らすために、Item を全件読み込んでいる。表示名の一致の規則（何を同じ名前とみなすか）を domain に置くかも、あわせて決める。データ層の実装時に、表示名を Repository へ渡す形へ移すかを、検索と作成で揃えて決める。Web 版では全件の通信が重くなること、SQLite の `LIKE` は英字の大文字・小文字を区別せず `%` や `_` のエスケープも必要なことを踏まえる。移した場合も、前後の空白の除去と空入力の扱いは今の場所（表示名は `NotBlankString`、検索語は UseCase）に残す。あわせて、同じ表示名の Item の作成が同時に行われた場合の重複を、データ層でどう防ぐかも決める（Room の `@Transaction` で足りるか、一意制約が要るかなど）
 - Recipe の保存時や Session への Recipe の追加時に既存の Item を使ったことを、材料の行単位で返す必要があるか。現時点では、使った既存の Item の一覧だけを返している。UI の実装時に確認する
-- 保存先から集約を読み戻す方法。ShoppingSession のコンストラクタは private なので、データ層の実装時に、中身を受け取って「集約と不変条件」の規則を確かめ、満たせば集約を作り、満たさなければ null を返す生成関数を domain に足す
+- 保存先から集約を読み戻す方法。ShoppingSession のコンストラクタは private なので、データ層の実装時に、中身を受け取って「集約と不変条件」の規則を確かめ、満たせば集約を作り、満たさなければ null を返す生成関数を domain に足す。内訳の ID は購入済みチェックの鍵なので、読み戻しても変わらないようにする
 - SessionItem の ID を残すか。1つの Session の中では SessionItem は Item へのつながりと表示名の組で一意に決まるので、行がその組で品目を指せば ID を外せる。ただし、品目の指し方が変わる操作（Session 限定の品目を Item として登録する、Item を統合する）では、ID がある方が行を書き換えずに済む。それらの操作を決めるときにあわせて見直す
 - 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合は、呼び出し側が個別に対処できることがないため、意味としては Repository の `Unexpected` に当たる。ただし `Unexpected` の中身が `Throwable` に固定されているので、データ層の実装時に見直す。ログもデータ層で残し、仕組みはそのときに決める。買い物リストの分量は表示で足すので、domain の買い物リストでは桁あふれは起きない。表示で足して桁があふれたときは、足さずに並べる（[spec.md](spec.md#買い物リスト表示)）
 - 同じ端末で Session への追加が同時に走った場合（連打など）の扱い。UseCase は進行中の Session を読んでから保存するため、片方の追加が失われるか、データ層の一意制約で失敗しうる。データ層の実装時に決める

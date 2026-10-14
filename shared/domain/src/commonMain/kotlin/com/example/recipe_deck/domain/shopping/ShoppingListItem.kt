@@ -14,12 +14,18 @@ data class ShoppingListItem(
 )
 
 sealed interface ShoppingListItemSource {
+    val id: ShoppingListItemSourceId
+
     data class FromRecipe(
+        override val id: ShoppingListItemSourceId,
         val recipeName: NotBlankString,
         val multiplier: Multiplier,
         val amount: Amount?,
         val isExcluded: Boolean,
     ) : ShoppingListItemSource
 
-    data class Manual(val amount: Amount?) : ShoppingListItemSource
+    data class Manual(
+        override val id: ShoppingListItemSourceId,
+        val amount: Amount?,
+    ) : ShoppingListItemSource
 }

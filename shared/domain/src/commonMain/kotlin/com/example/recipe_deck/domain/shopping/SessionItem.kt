@@ -12,5 +12,6 @@ data class SessionItem(
 )
 
 data class ManualAddition(
+    val id: ShoppingListItemSourceId,
     val amount: Amount?,
 )

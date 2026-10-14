@@ -32,6 +32,7 @@ data class ShoppingSession private constructor(
                 SessionItem(SessionItemId.generate(), ingredient.displayName, ingredient.itemId, manualAddition = null)
             }
             SessionRecipeIngredient(
+                id = ShoppingListItemSourceId.generate(),
                 sessionItemId = sessionItem.id,
                 amount = ingredient.amount,
                 isExcluded = ingredient.isExcluded,
@@ -55,6 +56,7 @@ data class ShoppingSession private constructor(
             .flatMap { recipe ->
                 recipe.ingredients.map { ingredient ->
                     ingredient.sessionItemId to ShoppingListItemSource.FromRecipe(
+                        id = ingredient.id,
                         recipeName = recipe.recipeName,
                         multiplier = recipe.multiplier,
                         amount = ingredient.amount,
@@ -65,7 +67,7 @@ data class ShoppingSession private constructor(
             .groupBy({ it.first }, { it.second })
         return items
             .map { item ->
-                val manualSource = item.manualAddition?.let { ShoppingListItemSource.Manual(it.amount) }
+                val manualSource = item.manualAddition?.let { ShoppingListItemSource.Manual(it.id, it.amount) }
                 ShoppingListItem(
                     sessionItemId = item.id,
                     displayName = item.displayName,

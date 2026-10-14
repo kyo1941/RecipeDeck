@@ -13,6 +13,7 @@ import com.example.recipe_deck.domain.notBlankStringOrFail
 import com.example.recipe_deck.domain.recipe.RecipeId
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -60,7 +61,20 @@ class ShoppingSessionTest {
         assertEquals(greenOnion, item.displayName)
         assertEquals(greenOnionId, item.itemId)
         assertNull(item.manualAddition)
-        assertEquals(listOf(SessionRecipeIngredient(item.id, onePiece, isExcluded = false)), recipe.ingredients)
+        val recipeIngredient = recipe.ingredients.single()
+        assertEquals(item.id, recipeIngredient.sessionItemId)
+        assertEquals(onePiece, recipeIngredient.amount)
+        assertFalse(recipeIngredient.isExcluded)
+    }
+
+    @Test
+    fun 同じ品目の材料でもSession内の材料はそれぞれ別の内訳のIDを持つ() {
+        val session = ShoppingSession.create(createdAt)
+            .withAddedMapoTofu(ingredient(greenOnion, greenOnionId), ingredient(greenOnion, greenOnionId))
+            .withAddedMapoTofu(ingredient(greenOnion, greenOnionId))
+
+        val ids = session.recipes.flatMap { recipe -> recipe.ingredients.map { it.id } }
+        assertEquals(3, ids.toSet().size)
     }
 
     @Test
@@ -133,6 +147,9 @@ class ShoppingSessionTest {
             .withAddedMapoTofu(ingredient(greenOnion, greenOnionId), ingredient(doubanjiang, amount = null))
             .withAddedRecipe(friedRice, notBlankStringOrFail("炒飯"), multiplierOrFail(1), listOf(ingredient(greenOnion, greenOnionId, amount = halfPiece)))
 
+        val (mapoTofuGreenOnion, mapoTofuDoubanjiang) = session.recipes[0].ingredients.map { it.id }
+        val friedRiceGreenOnion = session.recipes[1].ingredients.single().id
+
         val shoppingList = session.toShoppingList()
 
         assertEquals(session.items.map { it.id }, shoppingList.map { it.sessionItemId })
@@ -140,13 +157,13 @@ class ShoppingSessionTest {
         assertEquals(listOf(greenOnionId, null), shoppingList.map { it.itemId })
         assertEquals(
             listOf<ShoppingListItemSource>(
-                ShoppingListItemSource.FromRecipe(notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), onePiece, isExcluded = false),
-                ShoppingListItemSource.FromRecipe(notBlankStringOrFail("炒飯"), multiplierOrFail(1), halfPiece, isExcluded = false),
+                ShoppingListItemSource.FromRecipe(mapoTofuGreenOnion, notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), onePiece, isExcluded = false),
+                ShoppingListItemSource.FromRecipe(friedRiceGreenOnion, notBlankStringOrFail("炒飯"), multiplierOrFail(1), halfPiece, isExcluded = false),
             ),
             shoppingList[0].sources,
         )
         assertEquals(
-            listOf<ShoppingListItemSource>(ShoppingListItemSource.FromRecipe(notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), amount = null, isExcluded = false)),
+            listOf<ShoppingListItemSource>(ShoppingListItemSource.FromRecipe(mapoTofuDoubanjiang, notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), amount = null, isExcluded = false)),
             shoppingList[1].sources,
         )
     }
@@ -157,10 +174,12 @@ class ShoppingSessionTest {
     fun 材料が全て除外された品目も除外した内訳を持つ項目として買い物リストに残す() {
         val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion, greenOnionId, isExcluded = true))
 
+        val excludedGreenOnion = session.recipes.single().ingredients.single().id
+
         val sources = session.toShoppingList().single().sources
 
         assertEquals(
-            listOf<ShoppingListItemSource>(ShoppingListItemSource.FromRecipe(notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), onePiece, isExcluded = true)),
+            listOf<ShoppingListItemSource>(ShoppingListItemSource.FromRecipe(excludedGreenOnion, notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), onePiece, isExcluded = true)),
             sources,
         )
     }
