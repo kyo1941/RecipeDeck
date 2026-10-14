@@ -11,7 +11,7 @@ class ShowShoppingListUseCase(
 ) {
     suspend operator fun invoke(): ShowShoppingListResult = when (val found = shoppingSessionRepository.findActive()) {
         is Outcome.Success -> found.value
-            ?.let { ShowShoppingListResult.Shown(it.toShoppingList()) }
+            ?.let { ShowShoppingListResult.Shown(it.toShoppingList(purchasedSourceIds = emptySet())) }
             ?: ShowShoppingListResult.NoActiveSession
         is Outcome.Failure -> found.error.toShowShoppingListResult()
     }

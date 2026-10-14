@@ -128,6 +128,7 @@ erDiagram
   - 3パターンの sealed interface で表現しようとすると「手動追加」という概念が型定義から失われ、手動追加に属性が追加された際に重複定義が生じる
 - ManualSessionItem や RecipeSessionItem のように、由来ごとに型を増やさない
 - 買い物リストは永続化せず、`ShoppingSession.toShoppingList()` が表示のたびに Session の中身から作る。SessionItem ごとに買い物項目（`ShoppingListItem`）を作り、その品目を必要とする Session 内の材料と手動追加を内訳（`ShoppingListItemSource`）として集める。同じ品目の分量を足すのは表示で行い、domain は足さない（[spec.md](spec.md#買い物リスト表示)）
+  - 購入の記録から読んだ購入済みの内訳 ID を受け取り、内訳ごとに購入済みかを載せる。買い物項目の購入状態（`ShoppingListItem.isPurchased`）と、まとめて切り替える相手（除外していない内訳の ID）は、内訳から導く
   - 合計と内訳のどちらを見せるか、除外した材料や、材料がすべて除外された品目をどう見せるかは、表示側の責務とする。domain は除外の有無を内訳に残すだけで、見せ方を決めない
 
 ### 集約と不変条件
@@ -140,6 +141,8 @@ erDiagram
   - 材料と手動追加で ID の型を分けないのは、購入の記録がどちらの内訳も区別せずに並べて持つため
 - Session の分量は、Recipe 由来のものを SessionRecipe の下（SessionRecipeIngredient）に、手動追加を SessionItem の下（ManualAddition）に持つ。どちらも寿命の持ち主の下に置くためで、Recipe 由来の分量は追加1回分の Recipe と一緒に生まれて消える。買い物リストでは、どちらも内訳の1件として同列に並べる。品目単位の操作（買い物リスト上の品目単位の数量変更・削除）が Recipe 単位の操作より重くなったら、分量を品目の下にまとめる形（Recipe 由来か手動追加かを sealed interface で表す）への見直しを検討する
 - ShoppingSession は集約ルート。内部に SessionRecipe・SessionRecipeIngredient・SessionItem を保持する。Session 外部と関連を持つのは ItemId と元 Recipe の RecipeId のみとする
+- 購入の記録は、ShoppingSession とは別の集約。Session ごとの、購入済みの内訳 ID の集合で、守る規則は持たない（[spec.md](spec.md#購入済みチェック)）。ShoppingSession から購入の記録を指すことはなく、購入の記録が Session の ID と内訳の ID を指す
+  - Repository（`PurchaseRecordRepository`）は、ある買い物項目の内訳の ID をまとめて購入済み／未購入にする形で書き、集合をまるごと上書きしない。別の買い物項目への更新を失わないため。1回の呼び出しで変えるのは1つの Session の購入の記録だけなので、1つのトランザクションでは1つの集約だけを変更する原則に沿う
 - 1つの Session 内において、Item へのつながりと表示名がどちらも同じ SessionItem は最大1件（一意）。Item の rename の後に同じ Item から追加した分は、表示名が違うので別の SessionItem になる
 - SessionItem の表示名は、空白だけにできない
 - SessionRecipeIngredient が参照可能なのは、同一 Session 内の SessionItem に限る

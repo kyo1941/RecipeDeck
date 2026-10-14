@@ -51,7 +51,7 @@ data class ShoppingSession private constructor(
         )
     }
 
-    fun toShoppingList(): ImmutableList<ShoppingListItem> {
+    fun toShoppingList(purchasedSourceIds: Set<ShoppingListItemSourceId>): ImmutableList<ShoppingListItem> {
         val recipeSources = recipes
             .flatMap { recipe ->
                 recipe.ingredients.map { ingredient ->
@@ -61,13 +61,14 @@ data class ShoppingSession private constructor(
                         multiplier = recipe.multiplier,
                         amount = ingredient.amount,
                         isExcluded = ingredient.isExcluded,
+                        isPurchased = ingredient.id in purchasedSourceIds,
                     )
                 }
             }
             .groupBy({ it.first }, { it.second })
         return items
             .map { item ->
-                val manualSource = item.manualAddition?.let { ShoppingListItemSource.Manual(it.id, it.amount) }
+                val manualSource = item.manualAddition?.let { ShoppingListItemSource.Manual(it.id, it.amount, isPurchased = it.id in purchasedSourceIds) }
                 ShoppingListItem(
                     sessionItemId = item.id,
                     displayName = item.displayName,

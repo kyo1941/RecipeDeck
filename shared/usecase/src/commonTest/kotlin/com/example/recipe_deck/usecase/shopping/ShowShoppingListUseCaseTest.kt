@@ -30,7 +30,7 @@ class ShowShoppingListUseCaseTest {
 
         val result = showShoppingList()
 
-        assertEquals(ShowShoppingListResult.Shown(session.toShoppingList()), result)
+        assertEquals(ShowShoppingListResult.Shown(session.toShoppingList(purchasedSourceIds = emptySet())), result)
     }
 
     @Test
