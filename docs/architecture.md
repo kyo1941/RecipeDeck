@@ -66,6 +66,7 @@ erDiagram
     SessionItem ||--o| ManualAddition : "has"
     Item |o..o{ SessionItem : "linked (navigation only)"
     Recipe ||..o{ SessionRecipe : "source (navigation only)"
+    ShoppingSession ||..o{ PurchaseRecord : "purchased sources (by id)"
 
     Recipe {
         RecipeId id
@@ -115,6 +116,11 @@ erDiagram
         Amount amount
         boolean isExcluded
     }
+
+    PurchaseRecord {
+        ShoppingSessionId sessionId
+        ShoppingListItemSourceId sourceId
+    }
 ```
 
 - 材料（RecipeIngredient）は、Recipe のコンテキストにおいて「対象の Item をどう使うか」を保持する中間モデル
@@ -123,12 +129,14 @@ erDiagram
 - SessionItem は表示名を持つ。Item から作った品目は、Item へのつながり（`itemId`）も持つ。表示名は Recipe を追加したときに Item から写し、その後の Item の変更は反映しない。`itemId` は Item の画面への移動などの利便性のためのもので、Session の中身は Item に依存しない（[spec.md](spec.md#shoppingsession)）
 - `itemId` のない SessionItem が Session 限定の品目。Item を作らず、Session と同じ寿命を持つ（[spec.md](spec.md#item)）
 - 状態（`SessionState`）は `Active` と `Completed(completedAt)`。完了日時は完了した Session だけが持つ
+- PurchaseRecord は domain のクラスではない。購入の記録（「集約と不変条件」）を、購入済みの内訳1件を1行として描いている
 - 手動追加は、SessionItem 内で省略可能（nullable）な `ManualAddition` として保持し、さらにその中に省略可能な分量を持たせる（2段階の nullable）。`ManualAddition` 自体が null であれば手動追加されていないことを示し、分量が null であれば「数量指定なしで手動追加された」ことを意味する
   - 単なる参照の有無だけでは、同一の Item が Recipe にも含まれている場合に手動追加分と区別できず、Recipe を除外した際に手動追加した行を残せなくなる
   - 3パターンの sealed interface で表現しようとすると「手動追加」という概念が型定義から失われ、手動追加に属性が追加された際に重複定義が生じる
 - ManualSessionItem や RecipeSessionItem のように、由来ごとに型を増やさない
 - 買い物リストは永続化せず、`ShoppingSession.toShoppingList()` が表示のたびに Session の中身から作る。SessionItem ごとに買い物項目（`ShoppingListItem`）を作り、その品目を必要とする Session 内の材料と手動追加を内訳（`ShoppingListItemSource`）として集める。同じ品目の分量を足すのは表示で行い、domain は足さない（[spec.md](spec.md#買い物リスト表示)）
-  - 購入の記録から読んだ購入済みの内訳 ID を受け取り、内訳ごとに購入済みかを載せる。買い物項目の購入状態（`ShoppingListItem.isPurchased`）と、まとめて切り替える相手（除外していない内訳の ID）は、内訳から導く
+  - 購入の記録から読んだ購入済みの内訳 ID を受け取り、内訳ごとに購入済みかを載せる。買い物項目の購入状態（`ShoppingListItem.isPurchased`）と、まとめて切り替える相手（`ShoppingListItem.sourcesToBuy`。除外していない内訳）は、内訳から導く
+  - 買う内訳の規則を ShoppingSession に置かないのは、買い物項目の購入状態の導き方まで Session が持つことになり、購入済みを ShoppingSession に持たせない方針（[spec.md](spec.md#購入済みチェック)）とずれるため。また、購入の記録に書く鍵を渡すためだけの関数が、UseCase の都合で Session に生えるため
   - 合計と内訳のどちらを見せるか、除外した材料や、材料がすべて除外された品目をどう見せるかは、表示側の責務とする。domain は除外の有無を内訳に残すだけで、見せ方を決めない
 
 ### 集約と不変条件
@@ -142,7 +150,11 @@ erDiagram
 - Session の分量は、Recipe 由来のものを SessionRecipe の下（SessionRecipeIngredient）に、手動追加を SessionItem の下（ManualAddition）に持つ。どちらも寿命の持ち主の下に置くためで、Recipe 由来の分量は追加1回分の Recipe と一緒に生まれて消える。買い物リストでは、どちらも内訳の1件として同列に並べる。品目単位の操作（買い物リスト上の品目単位の数量変更・削除）が Recipe 単位の操作より重くなったら、分量を品目の下にまとめる形（Recipe 由来か手動追加かを sealed interface で表す）への見直しを検討する
 - ShoppingSession は集約ルート。内部に SessionRecipe・SessionRecipeIngredient・SessionItem を保持する。Session 外部と関連を持つのは ItemId と元 Recipe の RecipeId のみとする
 - 購入の記録は、ShoppingSession とは別の集約。Session ごとの、購入済みの内訳 ID の集合で、守る規則は持たない（[spec.md](spec.md#購入済みチェック)）。ShoppingSession から購入の記録を指すことはなく、購入の記録が Session の ID と内訳の ID を指す
-  - Repository（`PurchaseRecordRepository`）は、ある買い物項目の内訳の ID をまとめて購入済み／未購入にする形で書き、集合をまるごと上書きしない。別の買い物項目への更新を失わないため。1回の呼び出しで変えるのは1つの Session の購入の記録だけなので、1つのトランザクションでは1つの集約だけを変更する原則に沿う
+  - Repository（`PurchaseRecordRepository`）は、ある買い物項目の内訳の ID をまとめて購入済み／未購入にする形で書き（`record`）、集合をまるごと上書きしない。別の買い物項目への更新を失わないため。1回の呼び出しで変えるのは1つの Session の購入の記録だけなので、1つのトランザクションでは1つの集約だけを変更する原則に沿う
+  - 書く内訳の ID は集合（`Set`）で渡す。購入済みかは内訳の ID ごとに持つので、同じ ID を何度書いても結果は1回と同じで、順序にも意味がない。集合で渡せば、保存の具象は重複した ID の書き込みを考えずに済む
+  - クラスにしないのは、守る規則も振る舞いもなく、集合を包むだけの型になるため。規則や振る舞いが要るようになったら、クラスにする
+  - ShoppingSession に購入状態を持たせる形も、Session を読んで書く UseCase の読み書きを直列にすれば（楽観ロックなど）成り立つ。それでも別の集約にしたのは、実装を誤ったときの被害が違うため。Session に持たせると、直列にし忘れた UseCase が Session 全体を書き戻したときに、店頭で付けたチェックが黙って消え、二重に買うことにつながる。別の集約なら、Session の書き込みとチェックの書き込みは相手が違うのでぶつからず、誤っても残るのは画面に出ない記録だけになる
+  - Session の中身と購入状態を同時に書き換えないと破れる規則（例：全品が購入済みでないと Session を完了できない）ができたら、ShoppingSession に持たせる形を見直す
 - 1つの Session 内において、Item へのつながりと表示名がどちらも同じ SessionItem は最大1件（一意）。Item の rename の後に同じ Item から追加した分は、表示名が違うので別の SessionItem になる
 - SessionItem の表示名は、空白だけにできない
 - SessionRecipeIngredient が参照可能なのは、同一 Session 内の SessionItem に限る
@@ -192,7 +204,8 @@ erDiagram
 - Repository 起因の失敗は、Repository ごとに定義した sealed interface（例: `RecipeRepositoryFailure`）で表現する。これは技術的要因に基づく分類であり、UI 層の関心事とは完全に分離されている。失敗の種類を追加した際には、それを受け取る UseCase 側の `when` 式がコンパイルエラーとなるため、処理の考慮漏れを防止できる。今は Repository ごとに1つの型とし、メソッドによって発生しうる失敗の種類がずれてきたら、メソッドごとに型を分ける
 - データ層の実装では、利用する外部ライブラリから送出される例外を捕捉し、このドメイン失敗型にマッピングして返却する。これにより、UseCase 層が特定のライブラリに依存することを防ぐ
 - データ層の実装では、コルーチンの `CancellationException` を失敗型でラップせず、そのまま再送出（throw）する。失敗型にラップしてしまうと、全 UseCase 側でキャンセルの有無を個別に識別しなければならなくなるためである
-- `TransactionRunner` は、Room KMP の `useWriterConnection { it.immediateTransaction { … } }` で包み、`TransactionScope.rollback` を Room の `TransactionScope.rollback` へ渡す想定である。その中で Repository の実装が呼ぶ DAO が同じトランザクションに入るかは、公式ドキュメントで明記を確認できていないため、データ層の実装時に動かして確かめる。技術的に難しい場合は、トランザクションの境界とデータ層の実装を再検討する
+- 購入の記録は、Session と同じデータベースの別テーブルに置く。購入の記録は Session に属し、削除やトランザクションを Session と一緒に扱えるため。ライブラリは未確定（Room KMP が候補。「技術構成」の未確定）で、Session を Room に置くなら購入の記録も同じ Room に置く。DataStore は採らない。保存先が2つに分かれて Session と同じトランザクションに入れられず、チェック程度の書き込み頻度では読み書きの軽さも利点にならないため。Session を Room 以外に置くことになったら、この評価をやり直す
+- `TransactionRunner` は、Room KMP の `useWriterConnection { it.immediateTransaction { … } }` で包み、`TransactionScope.rollback` を Room の `TransactionScope.rollback` へ渡す想定である。その中で Repository の実装が呼ぶ DAO が同じトランザクションに入るかは、公式ドキュメントで明記を確認できていない。Room 2.8.5 の jvm・native 向けのソースでは、DAO はコルーチンに載った接続を使い回すので入る見込みだが（`ConnectionPoolImpl.useConnection`）、Android 向けは読んでいないので、データ層の実装時に動かして確かめる。技術的に難しい場合は、トランザクションの境界とデータ層の実装を再検討する
 
 ## 実装の進め方
 
@@ -244,16 +257,18 @@ AI による重複候補判定（13）は後から差し込む。
 手動追加のある Session を作る手段（手動追加の操作か、保存先からの読み戻し）がまだないため、手動追加の内訳はテストで確かめていない。手段ができたら、手動追加が内訳の最後に並ぶことと、手動追加だけの品目も買い物項目になることを、`toShoppingList()` を通して確かめる。
 
 12 では、`ShowShoppingListUseCase` が、進行中の Session に続けてその Session の購入の記録を読み、購入済みの内訳 ID を `toShoppingList` に渡すようにした。
-購入の記録が読めなければ、買い物リストを返さずに `Unexpected` を返す。購入状態の見えない買い物リストを見せても解決にならないためである。購入の記録は Session と同じデータベースに置くので、購入の記録だけが読めない失敗は起きにくいと見ている。保存の具象を作るときに、起きうるかを確かめ、起きうるならこの扱いを見直す。
+購入の記録が読めなければ、買い物リストを返さずに `Unexpected` を返す（今の決定）。購入状態の見えない買い物リストを見せても解決にならないためである。購入の記録は Session と同じデータベースに置くので、購入の記録だけが読めない失敗は起きにくいと見ている。起きうると分かったときだけ、この扱いを見直す（確かめることは未確定事項）。
 買い物項目を購入済み／未購入にする UseCase（`MarkShoppingListItemPurchasedUseCase`）は、品目（SessionItem の ID）と、付けたい値を受け取る。反転ではなく値を受け取るので、同じ要求を繰り返しても状態がずれない。
-進行中の Session と購入の記録を読んで買い物リストを作り、その品目の除外していない内訳の ID を、購入の記録の Repository に1回で書く。
+進行中の Session と購入の記録を読んで買い物リストを作り、その品目の買う内訳（`sourcesToBuy`）の ID を、購入の記録の Repository に1回で書く。
+購入状態は使わないが、買う内訳を買い物項目から得るために購入の記録も読む（理由は「ドメイン構造」の買い物リストの項）。
 次の場合は何も書かず、それぞれ専用の結果を返す。UI で起きないようにしていても、UseCase でも確かめる（「UseCase の方針」）。
 
 - 進行中の Session がない（`NoActiveSession`）。Session を終える操作がまだないので、今は起きない
 - 進行中の Session にその品目がない（`ShoppingListItemNoLongerExists`）。Session の完了・削除や品目の削除がまだないので、今は起きない
-- 品目の内訳がすべて除外されている（`AllSourcesExcluded`）。Recipe を足すときに材料を「今回は不要」にすれば、今でも起きる。この品目は購入済みと同じ扱いで、書く内訳がないため、外そうとしても変わらない
+- 品目の内訳がすべて除外されている（`AllSourcesExcluded`）。Recipe を足すときに材料を「今回は不要」にすれば、今でも起きる。書く内訳がないので、未購入にしようとしても変わらない（扱いは [spec.md](spec.md#購入済みチェック)）
 
-結果は書けたことだけを返し（`Marked`）、更新後の状態は返さない。何を返すかは、同じ品目を素早く続けて押したときの順序とあわせて、UI と保存の具象を作るときに決める。
+Session か購入の記録が読めないとき、購入の記録に書けないときは `Unexpected` を返す。
+今は、書けたことだけを返し（`Marked`）、更新後の状態は返さない。更新後の状態も返すかは、同じ品目を素早く続けて押したときの順序とあわせて、UI と保存の具象を作るときに見直す。
 
 ## AI / ML
 
@@ -283,7 +298,11 @@ PoC は完了済み。
 - Repository の分け方
 - ローカルの保存方式（Room KMP など）と、プラットフォームごとの Repository の実装
 - Room のテーブル・主キー・インデックス。Recipe の材料の行の主キー（行ごとの固有 ID か、所属と並び順か）もあわせて決める。domain の Recipe の材料の行は ID を持たない（「集約と不変条件」参照）
-- 購入済みチェック状態の永続化・保持方法（SavedStateHandle、Room の別の場所など）。KMP / CMP / iOS における挙動も調査した上で決定する。なお、Android の SavedStateHandle は、ユーザーによるアプリ終了や端末の再起動によって破棄される
+- 購入の記録の保存の具象（「データ層の方針」）で、データ層の実装時に確かめること
+  - Room を採る場合の系統（`androidx.room` 2.8 系か `androidx.room3` か）と、Kotlin 2.2.10・KSP・iOS 向けビルドとの互換。Session も同じデータベースに置くので、購入の記録だけの論点ではない
+  - 選んだ系統でも `TransactionRunner` の想定（「データ層の方針」）の書き方が使えるか
+  - 購入の記録だけが読めない失敗が起きうるか。起きうるなら、買い物リストを出すときに全体を `Unexpected` にする扱い（「実装の進め方」の 12）を見直す
+  - 購入の記録の読み込みに、Repository の中でメモリのキャッシュを持たせるか。持たせる場合も、書き込みは保存し終えてから完了とする（裏で書くと、タスクキルで消える）
 - Recipe の写真に関する未決定事項（詳細は [photo.md](photo.md) 参照）
 - Recipe 削除機能の実装時、編集画面からの保存によって削除済み Recipe を再作成しないようにするか。現時点では決めていない。今の実装は新規作成と同一の `save` メソッドで上書き保存する構成となっている
 - 変更がない状態での保存要求時にも永続化処理を行うかどうか。現時点では無条件で保存する実装となっており、将来のサーバー同期導入時に方針を決定する
@@ -293,6 +312,8 @@ PoC は完了済み。
 - SessionItem の ID を残すか。1つの Session の中では SessionItem は Item へのつながりと表示名の組で一意に決まるので、行がその組で品目を指せば ID を外せる。ただし、品目の指し方が変わる操作（Session 限定の品目を Item として登録する、Item を統合する）では、ID がある方が行を書き換えずに済む。それらの操作を決めるときにあわせて見直す
 - 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合は、呼び出し側が個別に対処できることがないため、意味としては Repository の `Unexpected` に当たる。ただし `Unexpected` の中身が `Throwable` に固定されているので、データ層の実装時に見直す。ログもデータ層で残し、仕組みはそのときに決める。買い物リストの分量は表示で足すので、domain の買い物リストでは桁あふれは起きない。表示で足して桁があふれたときは、足さずに並べる（[spec.md](spec.md#買い物リスト表示)）
 - 同じ端末で Session への追加が同時に走った場合（連打など）の扱い。UseCase は進行中の Session を読んでから保存するため、片方の追加が失われるか、データ層の一意制約で失敗しうる。データ層の実装時に決める
+  - 1つの集約の中の読み書きなので、`TransactionRunner`（複数の集約を1つのトランザクションにまとめるためのもの）を広げるより、楽観ロック（版の番号を持たせ、保存のときに違えば失敗にする）か、Repository に変え方を渡して中で1つのトランザクションにする形を先に検討する
+  - 購入の記録は別の集約なので、この問題の対象外（「集約と不変条件」）
 - UseCase の結果を画面向けに変換する層を設けるか（Presentation の層を挟むか、ViewModel が直接扱うか）。UI の実装時に決める
 - 別名（alias）の具体的な永続化構造
 - SAME / NOT_SAME 判定に対するフィードバックの保存形式
