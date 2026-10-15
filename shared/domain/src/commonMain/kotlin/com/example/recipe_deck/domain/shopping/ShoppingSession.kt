@@ -32,6 +32,7 @@ data class ShoppingSession private constructor(
                 SessionItem(SessionItemId.generate(), ingredient.displayName, ingredient.itemId, manualAddition = null)
             }
             SessionRecipeIngredient(
+                id = ShoppingListItemSourceId.generate(),
                 sessionItemId = sessionItem.id,
                 amount = ingredient.amount,
                 isExcluded = ingredient.isExcluded,
@@ -50,22 +51,24 @@ data class ShoppingSession private constructor(
         )
     }
 
-    fun toShoppingList(): ImmutableList<ShoppingListItem> {
+    fun toShoppingList(purchasedSourceIds: Set<ShoppingListItemSourceId>): ImmutableList<ShoppingListItem> {
         val recipeSources = recipes
             .flatMap { recipe ->
                 recipe.ingredients.map { ingredient ->
                     ingredient.sessionItemId to ShoppingListItemSource.FromRecipe(
+                        id = ingredient.id,
                         recipeName = recipe.recipeName,
                         multiplier = recipe.multiplier,
                         amount = ingredient.amount,
                         isExcluded = ingredient.isExcluded,
+                        isPurchased = ingredient.id in purchasedSourceIds,
                     )
                 }
             }
             .groupBy({ it.first }, { it.second })
         return items
             .map { item ->
-                val manualSource = item.manualAddition?.let { ShoppingListItemSource.Manual(it.amount) }
+                val manualSource = item.manualAddition?.let { ShoppingListItemSource.Manual(it.id, it.amount, isPurchased = it.id in purchasedSourceIds) }
                 ShoppingListItem(
                     sessionItemId = item.id,
                     displayName = item.displayName,
