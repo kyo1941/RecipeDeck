@@ -52,7 +52,7 @@ MVP ではユーザー自身が所有する Recipe を前提とし、公開・�
 | 買い物項目 | `ShoppingListItem` | 買い物リストの1行。SessionItem 1つにつき1つ |
 | 内訳 | `ShoppingListItemSource` | 買い物項目に必要な分量の出どころ1件。Recipe 由来（`FromRecipe`）か手動追加（`Manual`）か |
 | 購入済み | `ShoppingListItemSource.isPurchased` / `ShoppingListItem.isPurchased` | 内訳ごとに記録する。買い物項目は、除外していない内訳がすべて購入済みなら購入済み |
-| 重複候補 | `DuplicateCandidate` | 名前の入力中に、同じものかもしれないとしてユーザーに示す既存の Item や Session の品目。選ぶかどうかはユーザーが決める（[Item 重複判定と AI](#item-重複判定と-ai)） |
+| 重複候補 | `DuplicateCandidate` | 名前を入力する場面で、同じものかもしれないとしてユーザーに示す既存の Item や Session の品目。選ぶかどうかはユーザーが決める（[Item 重複判定と AI](#item-重複判定と-ai)） |
 | 購入の記録 | `PurchaseRecordRepository` | Session ごとの、購入済みの内訳の記録。ShoppingSession とは別の集約。domain にクラスはなく、この Repository が読み書きする |
 
 ## Recipe
@@ -247,7 +247,7 @@ AI による候補は完全一致より確度が一段落ちるため、完全�
 完全一致のように確認を挟まずに既存の Item を使うことはしない。
 
 候補判定は、保存とは別の操作として行う。
-UI は名前の入力中に候補を求め、ユーザーが候補を選べば、選んだ Item や品目を使う。
+UI は名前を入力する場面で候補を求め、ユーザーが候補を選べば、選んだ Item や品目を使う。
 候補を選ばずに保存したときは、候補を求めなかったときと同じく、表示名が完全一致すれば既存の Item を使い、一致しなければ新しい Item（Session への Recipe の追加では Session 限定の品目）になる。
 候補を入力中と保存時のどちらで求めるかは UI が決め、どちらでも保存の操作は変わらない。
 
