@@ -48,13 +48,13 @@ class ShoppingListItemTest {
     }
 
     @Test
-    fun 買う内訳のIDは除外した内訳を除いて手動追加を含む() {
+    fun 買う内訳は除外した内訳を除いて手動追加を含む() {
         val item = greenOnion(
             fromRecipe(mapoTofu, isPurchased = false),
             fromRecipe(friedRice, isPurchased = false, isExcluded = true),
             ShoppingListItemSource.Manual(manual, amount = null, isPurchased = false),
         )
 
-        assertEquals(listOf(mapoTofu, manual), item.sourceIdsToBuy)
+        assertEquals(listOf(mapoTofu, manual), item.sourcesToBuy.map { it.id })
     }
 }

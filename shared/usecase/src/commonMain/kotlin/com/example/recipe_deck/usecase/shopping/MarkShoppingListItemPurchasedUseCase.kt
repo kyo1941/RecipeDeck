@@ -22,7 +22,7 @@ class MarkShoppingListItemPurchasedUseCase(
         }
         val item = session.toShoppingList(purchasedSourceIds).find { it.sessionItemId == sessionItemId }
             ?: return MarkShoppingListItemPurchasedResult.ShoppingListItemNoLongerExists
-        val sourceIds = item.sourceIdsToBuy
+        val sourceIds = item.sourcesToBuy.map { it.id }
         if (sourceIds.isEmpty()) return MarkShoppingListItemPurchasedResult.AllSourcesExcluded
 
         return when (val marked = purchaseRecordRepository.mark(session.id, sourceIds, isPurchased)) {

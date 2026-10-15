@@ -15,10 +15,7 @@ data class ShoppingListItem(
     val isPurchased: Boolean
         get() = sourcesToBuy.all { it.isPurchased }
 
-    val sourceIdsToBuy: List<ShoppingListItemSourceId>
-        get() = sourcesToBuy.map { it.id }
-
-    private val sourcesToBuy: List<ShoppingListItemSource>
+    val sourcesToBuy: List<ShoppingListItemSource>
         get() = sources.filterNot { it is ShoppingListItemSource.FromRecipe && it.isExcluded }
 }
 
