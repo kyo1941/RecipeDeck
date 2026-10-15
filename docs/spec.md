@@ -52,6 +52,7 @@ MVP ではユーザー自身が所有する Recipe を前提とし、公開・�
 | 買い物項目 | `ShoppingListItem` | 買い物リストの1行。SessionItem 1つにつき1つ |
 | 内訳 | `ShoppingListItemSource` | 買い物項目に必要な分量の出どころ1件。Recipe 由来（`FromRecipe`）か手動追加（`Manual`）か |
 | 購入済み | `ShoppingListItemSource.isPurchased` / `ShoppingListItem.isPurchased` | 内訳ごとに記録する。買い物項目は、除外していない内訳がすべて購入済みなら購入済み |
+| 重複候補 | `DuplicateCandidate` | 名前の入力中に、同じものかもしれないとしてユーザーに示す既存の Item や Session の品目。選ぶかどうかはユーザーが決める（[Item 重複判定と AI](#item-重複判定と-ai)） |
 | 購入の記録 | `PurchaseRecordRepository` | Session ごとの、購入済みの内訳の記録。ShoppingSession とは別の集約。domain にクラスはなく、この Repository が読み書きする |
 
 ## Recipe
@@ -238,21 +239,34 @@ Session の中身を変える操作（Recipe の追加など）と、店頭で�
 
 **AI の採否によってドメインモデルを変更しない。**
 AI / ML はドメインの中心に置かず、UseCase へ差し込める補助機能として扱う。
-Item の新規作成や rename などの UseCase に対し、既存 Item との重複候補判定を差し込むかどうかだけの関心事として扱う。
+名前を入力する場面で、既存の Item や品目との重複候補をユーザーに示すかどうかだけの関心事として扱う。
 
 重複の検知には、表示名の完全一致による検知と、AI による候補判定の2種類がある。
-完全一致による検知は、仕組みとして確実に判定できるため、AI の有無にかかわらず行う。
-AI による候補判定は、UI での入力中・保存時のどちらで行う場合でも、後から UseCase へ差し込めるようにする。
+完全一致による検知は、仕組みとして確実に判定できるため、AI の有無にかかわらず行う。保存のときに、確認を挟まずに既存の Item を使う（[Item](#item)）。
 AI による候補は完全一致より確度が一段落ちるため、完全一致とは扱いも見せ方も変える。
 完全一致のように確認を挟まずに既存の Item を使うことはしない。
 
+候補判定は、保存とは別の操作として行う。
+UI は名前の入力中に候補を求め、ユーザーが候補を選べば、選んだ Item や品目を使う。
+候補を選ばずに保存したときは、候補を求めなかったときと同じく、表示名が完全一致すれば既存の Item を使い、一致しなければ新しい Item（Session への Recipe の追加では Session 限定の品目）になる。
+候補を入力中と保存時のどちらで求めるかは UI が決め、どちらでも保存の操作は変わらない。
+
+候補を求める場面と、候補にするもの：
+
+- Item の作成、Recipe の作成・編集の材料：既存の Item
+- Session への Recipe の追加の材料：既存の Item と、進行中の Session の品目。同じ表示名の Item と品目がどちらも候補になる場合は、Item を候補にする
+- Item の表示名変更（rename）：rename を作るときに接続する
+
+候補は確からしい順に並べた一覧で返し、何件を見せるかは UI が決める。候補がなければ空の一覧を返す。
+
 ```mermaid
 flowchart LR
-    A["Create / Rename Item UseCase"] --> B{"重複判定を有効化?"}
-    B -->|"No"| C["通常処理"]
-    B -->|"Yes"| D["Duplicate Candidate Resolution"]
-    D --> E["ユーザー確認"]
-    E --> C
+    A["名前を入力"] --> B["重複候補を求める"]
+    B --> C{"候補を選ぶ?"}
+    C -->|"Yes"| D["選んだ Item / 品目を使う"]
+    C -->|"No / 候補なし"| E{"表示名が完全一致?"}
+    E -->|"Yes"| F["既存の Item を使う"]
+    E -->|"No"| G["新しい Item / Session 限定の品目"]
 ```
 
 実装は機能フラグ（feature flag）等で ON / OFF を切り替えられる程度の疎結合を目指す。

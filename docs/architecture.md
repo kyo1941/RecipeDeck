@@ -240,8 +240,7 @@ erDiagram
 
 5 は、既存の Item を表示名の部分一致で探す UseCase と、Item を作成する UseCase を実装済み。
 Item 作成 UseCase は、重複候補をいつユーザーに見せるか（入力中か保存時か）という UI の作りとは切り離して作っている。
-AI による重複候補判定（13）は後から差し込む。
-差し込む場所によっては、結果の種類に加えて、ユーザーが候補を確認したうえで新規作成を選んだことを伝える引数も増える。
+重複候補の判定（13）は、Item 作成 UseCase には入れず、別の UseCase にした。
 
 10 は、Recipe を進行中の Session に追加する UseCase を実装済み。
 進行中の Session がなければ作り、下書きの Recipe は拒む。
@@ -270,6 +269,24 @@ AI による重複候補判定（13）は後から差し込む。
 
 Session か購入の記録が読めないとき、購入の記録に書けないときは `Unexpected` を返す。
 今は、書けたことだけを返し（`Marked`）、更新後の状態は返さない。更新後の状態も返すかは、同じ品目を素早く続けて押したときの順序とあわせて、UI と保存の具象を作るときに見直す。
+
+13 は、重複候補を求める UseCase を2つ実装した（[spec.md](spec.md#item-重複判定と-ai)）。
+
+- `FindDuplicateCandidatesUseCase`：既存の Item だけを候補にする。Item の作成と、Recipe の作成・編集の画面から使う。Recipe の材料は Item を必ず参照するので、Session の品目は候補にしない
+- `FindSessionDuplicateCandidatesUseCase`：既存の Item と進行中の Session の品目を候補にする（`DuplicateCandidate.OfItem` / `OfSessionItem`）。Session への Recipe の追加の画面から使う
+
+どちらも判定を `DuplicateCandidateFinder` に任せる。空白だけの入力なら判定せずに空の一覧を返し、判定に失敗したら `Unexpected` を返す。
+保存の UseCase（Item の作成、Recipe の作成・編集、Session への Recipe の追加）は変えていない。Item の候補を選べば今の入力（`ItemInput.Selected`）で渡せ、候補を選ばずに保存したときは今までどおり完全一致で既存の Item を使うためである。
+ただし、Session の品目を選んだことは今の入力で表せない。追加の画面を作るときに、`SessionIngredientInput` に Session の品目を選んだこと（品目の ID）を足し、UseCase は進行中の Session からその品目を引いて、表示名と Item へのつながりの組をそのまま `withAddedRecipe` に渡す（品目がもうなければ、選んだ Item がないときと同じく材料の位置を返す）。
+足すまでは名前を打った材料（`ItemInput.Typed`）として渡すしかなく、Item につながる品目のうち表示名が今の Item と違うもの（Item の rename の後など）を選んでも、別の品目になる。
+
+`DuplicateCandidateFinder` は `:shared:usecase` の `item` パッケージに置く interface で、具象はまだない。
+Repository と呼ばないのは、集約を保存も読み戻しもせず、「データ層の方針」の Repository の決まりが当てはまらないためである。domain に置かないのは、AI の採否で domain を変えないためである（[spec.md](spec.md#item-重複判定と-ai)）。
+具象は次を受け持つ。UseCase はこれらを持たない。
+
+- Item と進行中の Session の品目を読み、入力された表示名と比べる。進行中の Session がなければ Item だけを比べる
+- 閾値や件数を決め、確からしい順に並べる。明らかに別物の候補は外す
+- 同じ表示名の Item と Session の品目がどちらも候補になる場合は、Item を返す
 
 ## AI / ML
 
@@ -318,6 +335,6 @@ PoC は完了済み。
 - UseCase の結果を画面向けに変換する層を設けるか（Presentation の層を挟むか、ViewModel が直接扱うか）。UI の実装時に決める
 - 別名（alias）の具体的な永続化構造
 - SAME / NOT_SAME 判定に対するフィードバックの保存形式
-- AI 用の interface の名前と、機能フラグ（feature flag）の構造
+- 重複候補の判定の機能フラグ（feature flag）の構造。OFF のときに、候補を返さない `DuplicateCandidateFinder` を DI で渡すか、UI が候補の UseCase を呼ばないかを、DI と UI を作るときに決める。UseCase にはフラグを持たせない
 - ML の判定閾値（しきい値）
 - Android プラットフォームにおける読み仮名変換の実装方式
