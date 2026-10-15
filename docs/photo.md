@@ -42,7 +42,7 @@ Recipe の写真をどう選び、どこに置き、いつ消すかの検討を�
 
 ### 選んだ写真は仮置きにコピーし、保存のときに本番の場所に置く（決定）
 
-保存ボタンを押すまで写真を手元に保持し続けるには、OS から期限付きで提供された写真を、アプリが自分の管理する場所（メモリかファイル）へ写し取っておく必要があります（後述の「前提になる事実」参照）。
+保存ボタンを押すまで写真を手元に保持し続けるには、OS から持ち続けられない形で渡された写真を、アプリが自分の管理する場所（メモリかファイル）へ写し取っておく必要があります（後述の「前提になる事実」参照）。
 退避先および管理方式として、同一の状況（既存写真 old が設定された Recipe を編集し、写真 X を選択後、写真 Y に選び直して保存する）を想定し、以下の4方式を比較・検討しました。
 
 - **A. 画像データをそのままメモリ（ViewModel）に保持する**
@@ -255,8 +255,10 @@ FileKit が 0.x 系である点、カメラ撮影への対応要件がある点�
 2026-10-05 時点での調査結果に基づく情報です。
 （※「未確認」と記載した項目は、未調査であるか、公式ドキュメント等の出典で検証できていない項目です）
 
-- 写真は、OS から期限付きで提供される（一時ファイル、または期限付きの読み取り権限として）
-  - iOS の写真ピッカー（PHPicker）は、写真を一時ファイルとして渡し、受け取りハンドラ処理の完了に伴い OS がそのファイルを削除する。そのため、ハンドラ処理の中でアプリ専用フォルダへコピーする必要がある（[Apple Developer Forums](https://developer.apple.com/forums/thread/652695) 参照）
+- 写真は、アプリが持ち続けられない形で OS から渡される（すぐ消える一時ファイル、メモリ上のデータ、または期限付きの読み取り権限として）。持ち続けるには、アプリが自分で管理する場所（メモリかアプリ専用フォルダ）へ写す必要がある
+  - iOS の写真ピッカー（PHPicker）は、選ばれた写真を `NSItemProvider` で渡し、受け取り方は使う API によって違う（どれを使うかは未決）
+    - `loadFileRepresentation` は、写真を一時ファイルに書き出して渡し、受け取りハンドラが終わると OS がそのファイルを削除する。そのため、ハンドラの中でアプリ専用フォルダへコピーする必要がある（[loadFileRepresentation | Apple Developer Documentation](<https://developer.apple.com/documentation/foundation/nsitemprovider/loadfilerepresentation(fortypeidentifier:completionhandler:)>)。2026-10-15 に確認）
+    - `loadDataRepresentation` は、写真をメモリ上のデータとして渡す。ファイルにするには、アプリが自分で書き出す（[loadDataRepresentation | Apple Developer Documentation](<https://developer.apple.com/documentation/foundation/nsitemprovider/loaddatarepresentation(fortypeidentifier:completionhandler:)>)。2026-10-15 に確認）
   - Android の写真ピッカーが返すのは、実ファイルパスではなく `content://` スキームの URI。標準では、端末の再起動またはアプリプロセスの停止までしか読み取り権限が持続しない。`takePersistableUriPermission` により権限の有効期間を延長できるが、アプリ全体で最大 5,000 件までの上限があり、超過すると古いものから無効化される（[Photo picker | Android Developers](https://developer.android.com/training/data-storage/shared/photo-picker) 参照）
   - Android のカメラ（外部カメラアプリを起動して撮影を依頼する方法）は、アプリ側が事前に用意した出力先ファイル URI に撮影データを書き込む
   - iOS のカメラで撮影した写真がどのような形式で渡されるかは未調査
