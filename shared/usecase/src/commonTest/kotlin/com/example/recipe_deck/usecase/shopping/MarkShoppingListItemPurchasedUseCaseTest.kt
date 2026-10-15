@@ -112,7 +112,7 @@ class MarkShoppingListItemPurchasedUseCaseTest {
     fun 購入の記録の書き込みに失敗したら原因を持った予期しない失敗を返す() = runTest {
         val session = savedSession { withAddedRecipe("麻婆豆腐", ingredient(greenOnion)) }
         val cause = IllegalStateException("保存先に書き込めない")
-        purchaseRecordRepository.markFailure = PurchaseRecordRepositoryFailure.Unexpected(cause)
+        purchaseRecordRepository.recordFailure = PurchaseRecordRepositoryFailure.Unexpected(cause)
 
         assertEquals(MarkShoppingListItemPurchasedResult.Unexpected(cause), markShoppingListItemPurchased(session.itemIdOf(greenOnion), isPurchased = true))
     }

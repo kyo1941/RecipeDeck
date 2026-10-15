@@ -22,12 +22,12 @@ class MarkShoppingListItemPurchasedUseCase(
         }
         val item = session.toShoppingList(purchasedSourceIds).find { it.sessionItemId == sessionItemId }
             ?: return MarkShoppingListItemPurchasedResult.ShoppingListItemNoLongerExists
-        val sourceIds = item.sourcesToBuy.map { it.id }
-        if (sourceIds.isEmpty()) return MarkShoppingListItemPurchasedResult.AllSourcesExcluded
+        val sourceIds = item.sourcesToBuy.map { it.id }.toSet()
+            .ifEmpty { return MarkShoppingListItemPurchasedResult.AllSourcesExcluded }
 
-        return when (val marked = purchaseRecordRepository.mark(session.id, sourceIds, isPurchased)) {
+        return when (val recorded = purchaseRecordRepository.record(session.id, sourceIds, isPurchased)) {
             is Outcome.Success -> MarkShoppingListItemPurchasedResult.Marked
-            is Outcome.Failure -> marked.error.toMarkShoppingListItemPurchasedResult()
+            is Outcome.Failure -> recorded.error.toMarkShoppingListItemPurchasedResult()
         }
     }
 
