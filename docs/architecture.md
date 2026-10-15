@@ -278,10 +278,12 @@ Session か購入の記録が読めないとき、購入の記録に書けない
 どちらも判定を `DuplicateCandidateFinder` に任せる。空白だけの入力なら判定せずに空の一覧を返し、判定に失敗したら `Unexpected` を返す。
 保存の UseCase（Item の作成、Recipe の作成・編集、Session への Recipe の追加）は変えていない。Item の候補を選べば今の入力（`ItemInput.Selected`）で渡せ、候補を選ばずに保存したときは今までどおり完全一致で既存の Item を使うためである。
 ただし、Session の品目を選んだことは今の入力で表せない。追加の画面を作るときに、`SessionIngredientInput` に Session の品目を選んだこと（品目の ID）を足し、UseCase は進行中の Session からその品目を引いて、表示名と Item へのつながりの組をそのまま `withAddedRecipe` に渡す（品目がもうなければ、選んだ Item がないときと同じく材料の位置を返す）。
-足すまでの挙動は、spec の未確定事項に書いたとおりである（[spec.md](spec.md#未確定事項)）。
+足すまでは、Session の品目を選んでも、名前を打った材料（`ItemInput.Typed`）として渡すしかない。これは足すまでの回避策で、正式な渡し方ではない。
+Session 限定の品目は、同じ表示名の Item がない限りそれで同じ品目に入る（同じ表示名の Item があれば、候補には Item が出る）。Item につながる品目のうち表示名が今の Item と違うもの（Item の rename の後など）は、別の品目になる。
 
 `DuplicateCandidateFinder` は `:shared:usecase` の `item` パッケージに置く interface で、具象はまだない。
-Repository と呼ばないのは、集約の保存と読み出しを受け持つものではなく、表示名から候補を判定するもので、「データ層の方針」の Repository の決まりが当てはまらないためである。判定のために、具象が Item や Session を読むことはある。domain に置かないのは、AI の採否で domain を変えないためである（[spec.md](spec.md#item-重複判定と-ai)）。
+Repository と呼ばないのは、集約の保存と読み出しを受け持つものではなく、表示名から候補を判定するものだからである。判定のために、具象が Item や Session を読むことはある。domain に置かないのは、AI の採否で domain を変えないためである（[spec.md](spec.md#item-重複判定と-ai)）。
+失敗の返し方は、Repository と同じにする（「データ層の方針」）。具象は、使うライブラリや通信から送出される例外を捕まえて `DuplicateCandidateFinderFailure` にして返し、コルーチンの `CancellationException` は失敗にせず、そのまま再送出する。判定が遅いときに UI が呼び出しをキャンセルする（「AI / ML」）のは、キャンセルが失敗に変わらないことを前提にしている。
 具象は次を受け持つ。UseCase はこれらを持たない。
 
 - Item と進行中の Session の品目を読み、入力された表示名と比べる。進行中の Session がなければ Item だけを比べる
@@ -300,8 +302,10 @@ spec の「既知の安全な候補」（別名で解決できた候補）と「
   - 判定が遅いときや失敗したときに、保存まで巻き込まれる。入力中に候補を見せ終えていても、保存のたびに判定が走る
   - 保存の操作が候補を返して保存を止め、ユーザーに選ばせてから呼び直させる流れは、体験がかなり悪い。UI が保存ボタンを押したときに候補の UseCase を呼ぶこと（[spec.md](spec.md#item-重複判定と-ai) の「保存時」）を否定するものではない
   - 保存の UseCase に判定を入れることになるのは、候補を見ずに新規作成することを構造で防ぐと決めた場合か、別名（alias）を完全一致と同じく確認なしで既存の Item に結び付けると決めた場合だけである。後者をどう扱うかは、別名を作るときに決める（[spec.md](spec.md#別名aliasと既知知識)）
-- `DuplicateCandidateFinder` に Session の品目を引数で渡す形や、場面を分けずに Finder がいつも Item と Session の品目を返し、Item だけが要る UseCase が Session の品目を捨てる形
-  - 閾値や件数を決めるのは Finder なので、後で捨てられる Session の品目が枠を取り、Item の候補が減りうる。そのため場面ごとにメソッドを分け、Session の品目は Finder が自分で読む
+- `DuplicateCandidateFinder` に、UseCase が読んだ Session の品目を引数で渡す形
+  - 具象は Item を自分で読むので、Session の品目だけを引数で受け取ると、比べる相手の集め方が2か所に分かれる。比べる相手を集めるのは具象に任せれば足り、Session の品目を interface の引数として公開する必要がない
+- 場面を分けずに Finder がいつも Item と Session の品目を返し、Item だけが要る UseCase が Session の品目を捨てる形
+  - 閾値や件数を決めるのは Finder なので、後で捨てられる Session の品目が枠を取り、Item の候補が減りうる。そのため場面ごとにメソッドを分ける
 - Session の中で同じ品目とみなす条件から表示名を外し、Item へのつながりだけで決める形（候補の品目を選ぶ入力を足さなくても、Item を選べば rename 前の表示名の品目に入る）
   - ユーザーが選んだ Item の表示名が出ず、古い表示名のまま表示される。Session を Item から独立したスナップショットとし、rename を Session に反映しない方針（[spec.md](spec.md#shoppingsession)）とも合わない
   - Item へのつながりのない Session 限定の品目は、この条件では1つに決まらないので、結局は品目を選ぶ入力が要る
