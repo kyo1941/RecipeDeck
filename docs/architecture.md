@@ -12,10 +12,13 @@
 - マルチモジュール構成
 - アーキテクチャは DDD の設計思想を取り入れた、クリーンアーキテクチャに基づく MVVM パターン
 - Ktor サーバーは MVP に含めない。複数端末での共有、端末の移行、重複判定のモデルをサーバーで推論する場合（[AI / ML](#ai--ml)）、データのバックアップで要る想定で、どれも MVP に必須ではないため
+- DI は Metro を使う。組み立てられない依存をコンパイルで見つけられるため。実行時に組み立てる方式では、その依存を使う画面を開くまで誤りに気づけない
+  - UseCase には `@Inject` を付けず、`:shared:app` の組み立てに UseCase ごとの作り方（`@Provides`）を書く。UseCase 層を DI のライブラリに依存させないためで、外部のライブラリの例外を data で失敗型に変える（「データ層の方針」）のと同じ考えによる。作り方の書き漏れは Metro がコンパイルで見つける
 
 未確定：
 
-- Room KMP・Metro・Ktor Client などのライブラリ選定
+- Room KMP の採否と系統。MVP に含み、データ層（「実装の進め方」の 16）で決める
+- Ktor Client の採否。MVP には Ktor サーバーを含めないので、サーバーと通信するようになったときに決める
 
 ## モジュール構成
 
@@ -25,7 +28,7 @@
 | `:shared:domain` | ドメイン層の KMP モジュール。ターゲットは JVM・iosArm64・iosSimulatorArm64。パッケージは `amount` / `item` / `recipe` / `shopping`。Repository の interface もここに置く |
 | `:shared:usecase` | UseCase の KMP モジュール。`:shared:domain` に依存し、ターゲットも同じ。パッケージは `ingredient` / `item` / `recipe` / `shopping`。`ingredient` には、Recipe と Session の両方で使う材料の入力を置く |
 | `:shared:ui` | 画面の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:usecase` に依存する。今は仮の画面だけを置く |
-| `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui` に依存し、アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
+| `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui` と `:shared:usecase` に依存し、DI の組み立てを持つ。アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
 | `iosApp` | iOS アプリの入口。Gradle のモジュールではなく Xcode のプロジェクトで、`:shared:app` の framework を組み込み、その画面を表示する |
 
 `:shared:domain` と `:shared:usecase` は Android の API を使わないので、Android のターゲットを持たない。Android のターゲットを持つモジュール（`:shared:ui` など）からは、JVM のターゲットの成果物を使う。
@@ -282,7 +285,7 @@ Session か購入の記録が読めないとき、購入の記録に書けない
 足すまでは、Session の品目を選んでも、名前を打った材料（`ItemInput.Typed`）として渡すしかない。これは足すまでの回避策で、正式な渡し方ではない。
 Session 限定の品目は、同じ表示名の Item がない限りそれで同じ品目に入る（同じ表示名の Item があれば、候補には Item が出る）。Item につながる品目のうち表示名が今の Item と違うもの（Item の rename の後など）は、別の品目になる。
 
-`DuplicateCandidateFinder` は `:shared:usecase` の `item` パッケージに置く interface で、具象はまだない。
+`DuplicateCandidateFinder` は `:shared:usecase` の `item` パッケージに置く interface で、具象は候補を出さないもの（`:shared:app`。「AI / ML」の機能フラグの項）だけがある。
 Repository と呼ばないのは、集約の保存と読み出しを受け持つものではなく、表示名から候補を判定するものだからである。判定のために、具象が Item や Session を読むことはある。domain に置かないのは、AI の採否で domain を変えないためである（[spec.md](spec.md#item-重複判定と-ai)）。
 失敗の返し方は、Repository と同じにする（「データ層の方針」）。具象は、使うライブラリや通信から送出される例外を捕まえて `DuplicateCandidateFinderFailure` にして返し、コルーチンの `CancellationException` は失敗にせず、そのまま再送出する。判定が遅いときに UI が呼び出しをキャンセルする（「AI / ML」）のは、キャンセルが失敗に変わらないことを前提にしている。
 具象は次を受け持つ。UseCase はこれらを持たない。
@@ -373,6 +376,10 @@ PoC は完了済み。
 - 判定に失敗したときや遅いときに、ユーザーをそのまま新規作成へ進ませるか、知らせるかは、UI を作るときに決める。保存の UseCase は判定に依存しないので、判定が失敗しても作成はできる。遅いときは、UI が次の入力や保存で呼び出しをキャンセルすればよく、UseCase に時間切れは持たせない
 - Jev などの外部判定モデルの採用は保留
 - AI の方式によってドメインモデルを変更しない（[spec.md](spec.md#item-重複判定と-ai) の方針）
+- 重複候補の判定の機能フラグは、DI の組み立て（`:shared:app`）の1か所だけで見て、AI の具象と、候補を出さない Finder のどちらを渡すかを選ぶ。UI と UseCase にはフラグを持たせず、UI は候補の UseCase をいつも呼ぶ。OFF のときに AI の具象を作らずに済み、モデルも読み込まれない
+  - 今は AI の具象がないので、フラグは作らず、候補を出さない Finder だけを渡している。分岐が片側しかないフラグを作らないためで、AI の具象を作るときにフラグを足す
+  - フラグの値は起動時に決まるもので足りる。起動した後に切り替えるなら、呼ぶたびにフラグを見て振り分ける Finder を挟む
+  - UI がフラグを知りたくなるか（OFF のときに、候補を探している表示を出さないなど）は、画面を作るときに確かめる
 
 ## 未確定事項
 
@@ -401,6 +408,5 @@ PoC は完了済み。
 - UseCase の結果を画面向けに変換する層を設けるか（Presentation の層を挟むか、ViewModel が直接扱うか）。UI の実装時に決める
 - 別名（alias）の具体的な永続化構造
 - SAME / NOT_SAME 判定に対するフィードバックの保存形式
-- 重複候補の判定の機能フラグ（feature flag）の構造。OFF のときに、候補を返さない `DuplicateCandidateFinder` を DI で渡すか、UI が候補の UseCase を呼ばないかを、DI と UI を作るときに決める。UseCase にはフラグを持たせない
 - ML の判定閾値（しきい値）
 - Android プラットフォームにおける読み仮名変換の実装方式

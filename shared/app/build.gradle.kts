@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.metro)
 }
 
 kotlin {
@@ -29,6 +30,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(project(":shared:ui"))
+            implementation(project(":shared:usecase"))
             implementation(libs.compose.runtime)
         }
         iosMain.dependencies {
