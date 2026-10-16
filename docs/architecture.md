@@ -21,12 +21,13 @@
 
 | モジュール | 内容 |
 |---|---|
-| `:androidApp` | Android アプリ。現状は Android Studio の雛形のままで、`:shared:domain` には依存していない。CMP の構成への移行は未着手 |
+| `:androidApp` | Android アプリの入口。`MainActivity` だけを置き、`:shared:app` の画面を表示する |
 | `:shared:domain` | ドメイン層の KMP モジュール。ターゲットは JVM・iosArm64・iosSimulatorArm64。パッケージは `amount` / `item` / `recipe` / `shopping`。Repository の interface もここに置く |
 | `:shared:usecase` | UseCase の KMP モジュール。`:shared:domain` に依存し、ターゲットも同じ。パッケージは `ingredient` / `item` / `recipe` / `shopping`。`ingredient` には、Recipe と Session の両方で使う材料の入力を置く |
 | `:shared:ui` | 画面の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:usecase` に依存する。今は仮の画面だけを置く |
+| `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui` に依存し、アプリの入口（`:androidApp`）はこのモジュールに依存する |
 
-`:shared:domain` と `:shared:usecase` は Android の API を使わないので、Android のターゲットを持たない。Android のターゲットを持つモジュール（`:shared:ui`）からは、JVM のターゲットの成果物を使う。
+`:shared:domain` と `:shared:usecase` は Android の API を使わないので、Android のターゲットを持たない。Android のターゲットを持つモジュール（`:shared:ui` など）からは、JVM のターゲットの成果物を使う。
 JVM の版は、Android のターゲットも含めて全モジュールで 11 にそろえる。Gradle を JDK 25 で動作させている場合でも、JVM のターゲットの成果物を Android のターゲットから使えるようにするためである。
 
 ## ドメイン層の方針
