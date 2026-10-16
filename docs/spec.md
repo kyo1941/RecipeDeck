@@ -263,14 +263,16 @@ UI は名前を入力する場面で候補を求め、ユーザーが候補を�
 
 候補から Session の品目を選んだときは、その品目に入る。ただし、今の Session への Recipe の追加の操作は、Session の品目を選んだことをまだ受け取れない。追加の画面を作るときに受け取れるようにする（それまでの挙動は [architecture.md](architecture.md#実装の進め方) の 13）。
 
+rename は候補を選べないので、次の図には含めない（rename の規則は [Item](#item)）。
+
 ```mermaid
 flowchart LR
     A["名前を入力"] --> B["重複候補を求める"]
     B --> C{"候補を選ぶ?"}
     C -->|"Yes"| D["選んだ Item / 品目を使う"]
     C -->|"No / 候補なし"| E{"表示名が完全一致?"}
-    E -->|"Yes"| F["既存の Item を使う<br>（Item の単独作成と rename では、あることを返す）"]
-    E -->|"No"| G["新しい Item / Session 限定の品目<br>（rename では表示名を変える）"]
+    E -->|"Yes"| F["既存の Item を使う<br>（Item の単独作成では、あることを返す）"]
+    E -->|"No"| G["新しい Item / Session 限定の品目"]
 ```
 
 実装は機能フラグ（feature flag）等で ON / OFF を切り替えられる程度の疎結合を目指す。
