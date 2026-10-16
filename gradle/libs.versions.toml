@@ -1,9 +1,9 @@
 [versions]
 agp = "9.4.1"
-activityCompose = "1.8.0"
+activityCompose = "1.13.0"
 kotlin = "2.4.21"
 kotlinxCollectionsImmutable = "0.5.2"
-kotlinxCoroutines = "1.10.2"
+kotlinxCoroutines = "1.11.0"
 composeMultiplatform = "1.12.2"
 metro = "1.4.5"
 
