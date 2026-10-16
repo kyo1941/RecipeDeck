@@ -12,5 +12,5 @@
 ./gradlew :shared:domain:jvmTest :shared:domain:iosSimulatorArm64Test
 ./gradlew :shared:usecase:jvmTest :shared:usecase:iosSimulatorArm64Test
 ./gradlew :shared:domain:compileKotlinIosArm64 :shared:usecase:compileKotlinIosArm64
-./gradlew :app:assembleDebug
+./gradlew :androidApp:assembleDebug
 ```

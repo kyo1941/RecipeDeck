@@ -23,6 +23,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "RecipeDeck"
-include(":app")
+include(":androidApp")
 include(":shared:domain")
 include(":shared:usecase")

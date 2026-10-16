@@ -21,12 +21,12 @@
 
 | モジュール | 内容 |
 |---|---|
-| `:app` | Android アプリ。現状は Android Studio の雛形のままで、`:shared:domain` には依存していない。CMP の構成への移行は未着手 |
+| `:androidApp` | Android アプリ。現状は Android Studio の雛形のままで、`:shared:domain` には依存していない。CMP の構成への移行は未着手 |
 | `:shared:domain` | ドメイン層の KMP モジュール。ターゲットは JVM・iosArm64・iosSimulatorArm64。パッケージは `amount` / `item` / `recipe` / `shopping`。Repository の interface もここに置く |
 | `:shared:usecase` | UseCase の KMP モジュール。`:shared:domain` に依存し、ターゲットも同じ。パッケージは `ingredient` / `item` / `recipe` / `shopping`。`ingredient` には、Recipe と Session の両方で使う材料の入力を置く |
 
 `:shared:domain` と `:shared:usecase` の JVM ターゲットは 11 に固定している。
-Gradle を JDK 25 で動作させている場合でも、Java 11 でビルドしている `:app` から利用できるようにするためである。
+Gradle を JDK 25 で動作させている場合でも、Java 11 でビルドしている `:androidApp` から利用できるようにするためである。
 
 ## ドメイン層の方針
 
