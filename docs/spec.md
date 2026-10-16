@@ -270,7 +270,7 @@ flowchart LR
     C -->|"Yes"| D["選んだ Item / 品目を使う"]
     C -->|"No / 候補なし"| E{"表示名が完全一致?"}
     E -->|"Yes"| F["既存の Item を使う<br>（Item の単独作成と rename では、あることを返す）"]
-    E -->|"No"| G["新しい Item / Session 限定の品目"]
+    E -->|"No"| G["新しい Item / Session 限定の品目<br>（rename では表示名を変える）"]
 ```
 
 実装は機能フラグ（feature flag）等で ON / OFF を切り替えられる程度の疎結合を目指す。
