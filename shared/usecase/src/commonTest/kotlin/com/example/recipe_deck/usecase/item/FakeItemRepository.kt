@@ -14,7 +14,8 @@ class FakeItemRepository : ItemRepository {
 
     override suspend fun save(item: Item): Outcome<Unit, ItemRepositoryFailure> {
         saveFailure?.let { return Outcome.Failure(it) }
-        savedItems += item
+        val index = savedItems.indexOfFirst { it.id == item.id }
+        if (index >= 0) savedItems[index] = item else savedItems += item
         return Outcome.Success(Unit)
     }
 
