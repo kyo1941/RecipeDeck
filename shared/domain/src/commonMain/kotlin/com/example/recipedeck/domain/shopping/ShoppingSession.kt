@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.example.recipedeck.domain.shopping
 
 import com.example.recipedeck.domain.NotBlankString
@@ -8,7 +6,6 @@ import com.example.recipedeck.domain.recipe.RecipeId
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 @ConsistentCopyVisibility

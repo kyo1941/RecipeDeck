@@ -41,13 +41,6 @@ Gradle を JDK 25 で動作させている場合でも、Java 11 でビルドし
 - 有無だけを表すものは nullable、それ以上の意味を持つ状態は sealed interface で表す
 - ドメインのテストは、ドメインのルールを素直に確かめるものにとどめ、他層の責務をドメインのテストで検証しない
 
-### Kotlin 2.2 による制約
-
-- `kotlin.time.Instant` は Kotlin 2.2 では実験的 API のため、使うファイルごとに `@file:OptIn(ExperimentalTime::class)` を宣言する
-- `kotlin.uuid.Uuid` も同じく実験的 API のため、使うファイルごとに `@file:OptIn(ExperimentalUuidApi::class)` を宣言する
-
-Kotlin を 2.3 以降へアップデートする際に、これらの制約は見直しが可能である。
-
 ## ドメイン構造
 
 `:shared:domain` に実装した構造（最初は [PR #1](https://github.com/kyo1941/recipe-deck/pull/1)・[PR #2](https://github.com/kyo1941/recipe-deck/pull/2)。その後の変更も反映している）。

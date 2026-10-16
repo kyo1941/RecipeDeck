@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.example.recipedeck.usecase.shopping
 
 import com.example.recipedeck.domain.NotBlankString
@@ -20,7 +18,6 @@ import com.example.recipedeck.usecase.ingredient.ItemInput
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.time.Clock
-import kotlin.time.ExperimentalTime
 
 class AddRecipeToShoppingSessionUseCase(
     private val recipeRepository: RecipeRepository,

@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.example.recipedeck.usecase.shopping
 
 import com.example.recipedeck.domain.amount.Amount
@@ -28,7 +26,6 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Clock
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 class AddRecipeToShoppingSessionUseCaseTest {

@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.example.recipedeck.usecase.shopping
 
 import com.example.recipedeck.domain.NotBlankString
@@ -14,7 +12,6 @@ import com.example.recipedeck.usecase.notBlankStringOrFail
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 class MarkShoppingListItemPurchasedUseCaseTest {
