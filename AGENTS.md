@@ -11,6 +11,12 @@
 ```sh
 ./gradlew :shared:domain:jvmTest :shared:domain:iosSimulatorArm64Test
 ./gradlew :shared:usecase:jvmTest :shared:usecase:iosSimulatorArm64Test
-./gradlew :shared:domain:compileKotlinIosArm64 :shared:usecase:compileKotlinIosArm64
-./gradlew :app:assembleDebug
+./gradlew :shared:domain:compileKotlinIosArm64 :shared:usecase:compileKotlinIosArm64 :shared:ui:compileKotlinIosArm64 :shared:app:compileKotlinIosArm64
+./gradlew :androidApp:assembleDebug
+```
+
+iOS アプリのビルドは時間がかかるので、PR の前と、ビルドの設定（Gradle・Xcode のプロジェクト・モジュールの構成）を変えたときに流す。
+
+```sh
+xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios-derived CODE_SIGNING_ALLOWED=NO build
 ```

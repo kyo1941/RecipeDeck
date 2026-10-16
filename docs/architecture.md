@@ -1,6 +1,6 @@
-# Recipe-Deck アーキテクチャ
+# RecipeDeck アーキテクチャ
 
-このファイルは Recipe-Deck の設計・技術構成の正本です。
+このファイルは RecipeDeck の設計・技術構成の正本です。
 仕様については [spec.md](spec.md) を参照してください。
 設計に関わる変更をした PR では、このファイルも同じ PR で更新します。
 
@@ -11,22 +11,35 @@
 - Compose Multiplatform・Kotlin Multiplatform・Ktor を採用する
 - マルチモジュール構成
 - アーキテクチャは DDD の設計思想を取り入れた、クリーンアーキテクチャに基づく MVVM パターン
+- Ktor サーバーは MVP に含めない。複数端末での共有、端末の移行、重複判定のモデルをサーバーで推論する場合（[AI / ML](#ai--ml)）、データのバックアップで要る想定で、どれも MVP に必須ではないため
+- DI は Metro を使う。組み立てられない依存をコンパイルで見つけられるため。実行時に組み立てる方式では、その依存を使う画面を開くまで誤りに気づけない
+  - UseCase には `@Inject` を付けず、`:shared:app` の組み立てに UseCase ごとの作り方（`@Provides`）を書く。UseCase 層を DI のライブラリに依存させないためで、外部のライブラリの例外を data で失敗型に変える（「データ層の方針」）のと同じ考えによる。作り方の書き漏れは Metro がコンパイルで見つける
 
 未確定：
 
-- Room KMP・Metro・Ktor Client などのライブラリ選定
-- Ktor サーバーの役割（重複判定のモデルをサーバーで推論する案がある。[AI / ML](#ai--ml)）
+- Room KMP の採否と系統。MVP に含み、データ層（「実装の進め方」の 16）で決める
+- Ktor Client の採否。MVP には Ktor サーバーを含めないので、サーバーと通信するようになったときに決める
+- ViewModel・画面遷移・Material 3 のライブラリ。UI（「実装の進め方」の 17）で決める。ViewModel に Metro の `@Inject` を付けるかもあわせて決める。UseCase に付けない理由（UseCase 層を DI のライブラリに依存させない）は、外側の層の ViewModel には当たらない
 
 ## モジュール構成
 
 | モジュール | 内容 |
 |---|---|
-| `:app` | Android アプリ。現状は Android Studio の雛形のままで、`:shared:domain` には依存していない。CMP の構成への移行は未着手 |
+| `:androidApp` | Android アプリの入口。`MainActivity` だけを置き、`:shared:app` の画面を表示する |
 | `:shared:domain` | ドメイン層の KMP モジュール。ターゲットは JVM・iosArm64・iosSimulatorArm64。パッケージは `amount` / `item` / `recipe` / `shopping`。Repository の interface もここに置く |
 | `:shared:usecase` | UseCase の KMP モジュール。`:shared:domain` に依存し、ターゲットも同じ。パッケージは `ingredient` / `item` / `recipe` / `shopping`。`ingredient` には、Recipe と Session の両方で使う材料の入力を置く |
+| `:shared:ui` | 画面の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:usecase` に依存する。今は仮の画面だけを置く |
+| `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui` と `:shared:usecase` に依存し、DI の組み立てを持つ。アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
+| `iosApp` | iOS アプリの入口。Gradle のモジュールではなく Xcode のプロジェクトで、`:shared:app` の framework を組み込み、その画面を表示する |
 
-`:shared:domain` と `:shared:usecase` の JVM ターゲットは 11 に固定している。
-Gradle を JDK 25 で動作させている場合でも、Java 11 でビルドしている `:app` から利用できるようにするためである。
+DI の組み立てを `:shared:ui` ではなく `:shared:app` に置くのは、16 からデータ層の具象を組み立てる側が知る必要があるためである。`:shared:ui` に置くと、画面や ViewModel のコードからもデータ層の具象が見えてしまう。分ければ、`:shared:ui` は `:shared:usecase` にしか依存しないので、UI からデータ層の具象を使うとビルドが落ちる。
+
+`:shared:domain` と `:shared:usecase` は Android の API を使わないので、Android のターゲットを持たない。Android のターゲットを持つモジュール（`:shared:ui` など）からは、JVM のターゲットの成果物を使う。
+JVM の版は、Android のターゲットも含めて全モジュールで 11 にそろえる。Gradle を JDK 25 で動作させている場合でも、JVM のターゲットの成果物を Android のターゲットから使えるようにするためである。
+
+iOS の最小の版（deployment target）は 18.5 にしている。Compose Multiplatform が同梱するライブラリが 18.5 向けにビルドされており、それより下げるとリンク時に警告が出て、動くことも確かめられないためである。
+上げるのは、使うライブラリの最低の版が上がったときか、18.5 にない iOS の API が要るようになったときとする。画面は Compose Multiplatform で作り、Swift のコードは入口だけなので、新しい iOS の API が要ることは少ない。
+Android の minSdk は 24 で、Compose Multiplatform の最低（API 21）を満たしている。
 
 ## ドメイン層の方針
 
@@ -40,14 +53,6 @@ Gradle を JDK 25 で動作させている場合でも、Java 11 でビルドし
 - 日時には `kotlin.time.Instant` を使用する。現在時刻は UseCase 側から引数で渡し、ドメイン層内部では時刻取得を行わない
 - 有無だけを表すものは nullable、それ以上の意味を持つ状態は sealed interface で表す
 - ドメインのテストは、ドメインのルールを素直に確かめるものにとどめ、他層の責務をドメインのテストで検証しない
-
-### Kotlin 2.2 による制約
-
-- kotlinx-collections-immutable は 0.4.0 を使う。0.5 系は Kotlin 2.3 でビルドされており、Kotlin 2.2 の iOS ターゲットでは読み込めないため
-- `kotlin.time.Instant` は Kotlin 2.2 では実験的 API のため、使うファイルごとに `@file:OptIn(ExperimentalTime::class)` を宣言する
-- `kotlin.uuid.Uuid` も同じく実験的 API のため、使うファイルごとに `@file:OptIn(ExperimentalUuidApi::class)` を宣言する
-
-Kotlin を 2.3 以降へアップデートする際に、これらの制約は見直しが可能である。
 
 ## ドメイン構造
 
@@ -226,7 +231,9 @@ erDiagram
 12. 購入済みチェックの操作
 13. Item 重複候補判定を UseCase へ接続
 14. rename / merge を必要な範囲で追加
-15. Room や UI の詳細を実装に合わせて確定
+15. 土台（CMP の構成への移行、DI、Kotlin の版）
+16. データ層（Room KMP による Repository と `TransactionRunner` の具象）
+17. UI（画面の流れごとに分けて進める）
 
 1〜3 および 6〜9 は、ドメイン層の型として実装済み。
 4 は、名前・状態・材料を指定して Recipe を作成する UseCase（メモは作成では受け取らず、編集で付ける）、および名前・状態・メモ・材料を編集する UseCase を実装済み。
@@ -281,7 +288,7 @@ Session か購入の記録が読めないとき、購入の記録に書けない
 足すまでは、Session の品目を選んでも、名前を打った材料（`ItemInput.Typed`）として渡すしかない。これは足すまでの回避策で、正式な渡し方ではない。
 Session 限定の品目は、同じ表示名の Item がない限りそれで同じ品目に入る（同じ表示名の Item があれば、候補には Item が出る）。Item につながる品目のうち表示名が今の Item と違うもの（Item の rename の後など）は、別の品目になる。
 
-`DuplicateCandidateFinder` は `:shared:usecase` の `item` パッケージに置く interface で、具象はまだない。
+`DuplicateCandidateFinder` は `:shared:usecase` の `item` パッケージに置く interface で、具象は候補を出さないもの（`:shared:app`。「AI / ML」の機能フラグの項）だけがある。
 Repository と呼ばないのは、集約の保存と読み出しを受け持つものではなく、表示名から候補を判定するものだからである。判定のために、具象が Item や Session を読むことはある。domain に置かないのは、AI の採否で domain を変えないためである（[spec.md](spec.md#item-重複判定と-ai)）。
 失敗の返し方は、Repository と同じにする（「データ層の方針」）。具象は、使うライブラリや通信から送出される例外を捕まえて `DuplicateCandidateFinderFailure` にして返し、コルーチンの `CancellationException` は失敗にせず、そのまま再送出する。判定が遅いときに UI が呼び出しをキャンセルする（「AI / ML」）のは、キャンセルが失敗に変わらないことを前提にしている。
 具象は次を受け持つ。UseCase はこれらを持たない。
@@ -338,6 +345,20 @@ UI を作るときに決めること：
 - rename の画面に、名前が変わる Recipe を見せるか。見せるなら、Item から Recipe を引く読み出しを足す
 - rename の結果（`RenameItemResult.Renamed`）に、変えた後の Item を持たせ続けるか。今は持たせている。呼び出し側は、保存された表示名（前後の空白を除いたもの）を知らないため。持たせずに UI を作ると、無いことを前提に作ってしまい、要ると気づきにくい。持たせておけば、UI で使わないと分かったときに外せばよい
 
+15〜17 では、spec の代表フロー（[spec.md](spec.md#プロダクトの中核)）を、Android と iOS の両方でアプリを起動して端から端まで動かせるところまで作る。どちらかのプラットフォームを先に仕上げることはしない。
+順序を土台、データ層、UI にするのは、`TransactionRunner` の想定（「データ層の方針」）を Android でまだ確かめておらず、成り立たなければ UseCase に跳ね返りうるためである。UI は UseCase を通してしかデータ層に触れないので、設計の上ではどちらを先に作ってもよい。
+写真、merge、Web 版は、15〜17 では扱わない。重複候補の判定の具象（AI）を MVP に含めるかは、別に決める。
+
+UI を作るときに足す UseCase（今は無い）：
+
+- Recipe の一覧を読む。`RecipeRepository` に一覧の読み出しが無い
+- 編集する Recipe を読む
+- Session を完了する。完了できないと進行中の Session が残り続け、次の買い物を始められない。完了日時の規則（「集約と不変条件」）の扱いも、そのときに決める
+
+15 では、CMP の構成に移し、両方のアプリが共通の仮の画面を表示するところまでを作った。モジュールの分け方と依存の向きは「モジュール構成」、DI は「技術構成」、重複候補の判定の機能フラグは「AI / ML」に書いた。
+DI のグラフが組み立てるのは、候補を出さない Finder と `FindDuplicateCandidatesUseCase` だけである。ほかの UseCase は Repository の具象が要るので、16・17 で足す。グラフを実行時に作るのは、画面に UseCase を渡す 17 からで、それまでは Metro のコンパイル時の検証だけで組み立てを確かめる。
+Kotlin を 2.4.21 に上げ、Kotlin 2.2 のために置いていた制約（kotlinx-collections-immutable を 0.4.0 に留める、`Instant`・`Uuid` の `OptIn`）を外した。
+
 ## AI / ML
 
 PoC は完了済み。
@@ -362,6 +383,10 @@ PoC は完了済み。
 - 判定に失敗したときや遅いときに、ユーザーをそのまま新規作成へ進ませるか、知らせるかは、UI を作るときに決める。保存の UseCase は判定に依存しないので、判定が失敗しても作成はできる。遅いときは、UI が次の入力や保存で呼び出しをキャンセルすればよく、UseCase に時間切れは持たせない
 - Jev などの外部判定モデルの採用は保留
 - AI の方式によってドメインモデルを変更しない（[spec.md](spec.md#item-重複判定と-ai) の方針）
+- 重複候補の判定の機能フラグは、DI の組み立て（`:shared:app`）の1か所だけで見て、AI の具象と、候補を出さない Finder のどちらを渡すかを選ぶ。UI と UseCase にはフラグを持たせず、UI は候補の UseCase をいつも呼ぶ。OFF のときに AI の具象を作らずに済み、モデルも読み込まれない
+  - 今は AI の具象がないので、フラグは作らず、候補を出さない Finder だけを渡している。分岐が片側しかないフラグを作らないためで、AI の具象を作るときにフラグを足す
+  - フラグの値は起動時に決まるもので足りる。起動した後に切り替えるなら、呼ぶたびにフラグを見て振り分ける Finder を挟む
+  - UI がフラグを知りたくなるか（OFF のときに、候補を探している表示を出さないなど）は、画面を作るときに確かめる
 
 ## 未確定事項
 
@@ -371,7 +396,7 @@ PoC は完了済み。
 - ローカルの保存方式（Room KMP など）と、プラットフォームごとの Repository の実装
 - Room のテーブル・主キー・インデックス。Recipe の材料の行の主キー（行ごとの固有 ID か、所属と並び順か）もあわせて決める。domain の Recipe の材料の行は ID を持たない（「集約と不変条件」参照）
 - 購入の記録の保存の具象（「データ層の方針」）で、データ層の実装時に確かめること
-  - Room を採る場合の系統（`androidx.room` 2.8 系か `androidx.room3` か）と、Kotlin 2.2.10・KSP・iOS 向けビルドとの互換。Session も同じデータベースに置くので、購入の記録だけの論点ではない
+  - Room を採る場合の系統（`androidx.room` 2.8 系か `androidx.room3` か）と、Kotlin・KSP・iOS 向けビルドとの互換。Session も同じデータベースに置くので、購入の記録だけの論点ではない
   - 選んだ系統でも `TransactionRunner` の想定（「データ層の方針」）の書き方が使えるか
   - 購入の記録だけが読めない失敗が起きうるか。起きうるなら、買い物リストを出すときに全体を `Unexpected` にする扱い（「実装の進め方」の 12）を見直す
   - 購入の記録の読み込みに、Repository の中でメモリのキャッシュを持たせるか。持たせる場合も、書き込みは保存し終えてから完了とする（裏で書くと、タスクキルで消える）
@@ -390,6 +415,6 @@ PoC は完了済み。
 - UseCase の結果を画面向けに変換する層を設けるか（Presentation の層を挟むか、ViewModel が直接扱うか）。UI の実装時に決める
 - 別名（alias）の具体的な永続化構造
 - SAME / NOT_SAME 判定に対するフィードバックの保存形式
-- 重複候補の判定の機能フラグ（feature flag）の構造。OFF のときに、候補を返さない `DuplicateCandidateFinder` を DI で渡すか、UI が候補の UseCase を呼ばないかを、DI と UI を作るときに決める。UseCase にはフラグを持たせない
 - ML の判定閾値（しきい値）
 - Android プラットフォームにおける読み仮名変換の実装方式
+- iOS の最小の版（今は 18.5。「モジュール構成」）を、配る相手などを踏まえて改めて決める
