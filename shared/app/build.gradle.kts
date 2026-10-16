@@ -16,13 +16,23 @@ kotlin {
             jvmTarget = JvmTarget.JVM_11
         }
     }
-    iosArm64()
-    iosSimulatorArm64()
+    listOf(
+        iosArm64(),
+        iosSimulatorArm64(),
+    ).forEach { iosTarget ->
+        iosTarget.binaries.framework {
+            baseName = "Shared"
+            isStatic = true
+        }
+    }
 
     sourceSets {
         commonMain.dependencies {
             implementation(project(":shared:ui"))
             implementation(libs.compose.runtime)
+        }
+        iosMain.dependencies {
+            implementation(libs.compose.ui)
         }
     }
 }

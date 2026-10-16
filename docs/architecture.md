@@ -25,10 +25,15 @@
 | `:shared:domain` | ドメイン層の KMP モジュール。ターゲットは JVM・iosArm64・iosSimulatorArm64。パッケージは `amount` / `item` / `recipe` / `shopping`。Repository の interface もここに置く |
 | `:shared:usecase` | UseCase の KMP モジュール。`:shared:domain` に依存し、ターゲットも同じ。パッケージは `ingredient` / `item` / `recipe` / `shopping`。`ingredient` には、Recipe と Session の両方で使う材料の入力を置く |
 | `:shared:ui` | 画面の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:usecase` に依存する。今は仮の画面だけを置く |
-| `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui` に依存し、アプリの入口（`:androidApp`）はこのモジュールに依存する |
+| `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui` に依存し、アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
+| `iosApp` | iOS アプリの入口。Gradle のモジュールではなく Xcode のプロジェクトで、`:shared:app` の framework を組み込み、その画面を表示する |
 
 `:shared:domain` と `:shared:usecase` は Android の API を使わないので、Android のターゲットを持たない。Android のターゲットを持つモジュール（`:shared:ui` など）からは、JVM のターゲットの成果物を使う。
 JVM の版は、Android のターゲットも含めて全モジュールで 11 にそろえる。Gradle を JDK 25 で動作させている場合でも、JVM のターゲットの成果物を Android のターゲットから使えるようにするためである。
+
+iOS の最小の版（deployment target）は 18.5 にしている。Compose Multiplatform が同梱するライブラリが 18.5 向けにビルドされており、それより下げるとリンク時に警告が出て、動くことも確かめられないためである。
+上げるのは、使うライブラリの最低の版が上がったときか、18.5 にない iOS の API が要るようになったときとする。画面は Compose Multiplatform で作り、Swift のコードは入口だけなので、新しい iOS の API が要ることは少ない。
+Android の minSdk は 24 で、Compose Multiplatform の最低（API 21）を満たしている。
 
 ## ドメイン層の方針
 
