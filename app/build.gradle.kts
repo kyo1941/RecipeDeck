@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.recipe_deck"
+    namespace = "com.example.recipedeck"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.recipe_deck"
+        applicationId = "com.example.recipedeck"
         minSdk = 24
         targetSdk = 37
         versionCode = 1
