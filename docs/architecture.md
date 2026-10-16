@@ -272,7 +272,7 @@ Session か購入の記録が読めないとき、購入の記録に書けない
 
 13 は、重複候補を求める UseCase を2つ実装した（[spec.md](spec.md#item-重複判定と-ai)）。
 
-- `FindDuplicateCandidatesUseCase`：既存の Item だけを候補にする。Item の作成と、Recipe の作成・編集の画面から使う。Recipe の材料は Item を必ず参照するので、Session の品目は候補にしない
+- `FindDuplicateCandidatesUseCase`：既存の Item だけを候補にする。Item の作成と rename、Recipe の作成・編集の画面から使う。Recipe の材料は Item を必ず参照するので、Session の品目は候補にしない
 - `FindSessionDuplicateCandidatesUseCase`：既存の Item と進行中の Session の品目を候補にする（`DuplicateCandidate.OfItem` / `OfSessionItem`）。Session へ Recipe を追加するときに使う。どの画面から追加するか（Session の画面か、Recipe の画面か）は問わない
 
 どちらも判定を `DuplicateCandidateFinder` に任せる。空白だけの入力なら判定せずに空の一覧を返し、判定に失敗したら `Unexpected` を返す。
@@ -286,7 +286,7 @@ Repository と呼ばないのは、集約の保存と読み出しを受け持つ
 失敗の返し方は、Repository と同じにする（「データ層の方針」）。具象は、使うライブラリや通信から送出される例外を捕まえて `DuplicateCandidateFinderFailure` にして返し、コルーチンの `CancellationException` は失敗にせず、そのまま再送出する。判定が遅いときに UI が呼び出しをキャンセルする（「AI / ML」）のは、キャンセルが失敗に変わらないことを前提にしている。
 具象は次を受け持つ。UseCase はこれらを持たない。
 
-- Item と進行中の Session の品目を読み、入力された表示名と比べる。進行中の Session がなければ Item だけを比べる
+- Item と進行中の Session の品目を読み、入力された表示名と比べる。進行中の Session がなければ Item だけを比べる。除く Item を渡されたら、その Item とは比べない
 - 閾値と、返す候補の件数の上限を決め、確からしい順に並べる。明らかに別物の候補は外す。返した候補のうち何件をユーザーに見せるかは UI が決める
 - 同じ表示名の Item と Session の品目がどちらも候補になる場合は、Item を返す
 - 上の規則に当たらない組み合わせで、複数の候補が当たる場合に、両方を返すか、確からしい方だけを返すか。例えば、表示名が違う Item と Session の品目（「たまねぎ」の Item と「玉ねぎ」の品目など）や、表示名が同じで Item へのつながりが違う Session の品目どうし。どちらにするかは具象を作るときに決める。推論の結果をどう解釈するかは具象の責務で、UseCase は持たない
@@ -309,6 +309,34 @@ spec の「既知の安全な候補」（別名で解決できた候補）と「
 - Session の中で同じ品目とみなす条件から表示名を外し、Item へのつながりだけで決める形（候補の品目を選ぶ入力を足さなくても、Item を選べば rename 前の表示名の品目に入る）
   - ユーザーが選んだ Item の表示名が出ず、古い表示名のまま表示される。Session を Item から独立したスナップショットとし、rename を Session に反映しない方針（[spec.md](spec.md#shoppingsession)）とも合わない
   - Item へのつながりのない Session 限定の品目は、この条件では1つに決まらないので、結局は品目を選ぶ入力が要る
+
+14 は、Item の表示名を変える UseCase（`RenameItemUseCase`）を実装した。merge は作っていない（[spec.md](spec.md#未確定事項)）。
+Item 作成 UseCase と同じく Item を全件読み、変える Item と、表示名が完全一致する別の Item を探す。別の Item と一致したら保存せずに `AlreadyExists` でその Item を返し、変える Item がなければ `ItemNoLongerExists` を返す（今は Item の削除がないので起きない）。
+`ItemRepository.save` は、Recipe の保存と同じく、同じ ID の Item があれば上書きする。rename はこれを使う。
+Session には rename を反映しない（[spec.md](spec.md#shoppingsession)）ので、UseCase は Session を読まない。
+rename の画面で重複候補を求めるときは、`FindDuplicateCandidatesUseCase` に名前を変える Item の ID（`renamingItemId`）を渡し、`DuplicateCandidateFinder.findItems` はその Item を候補から除く（`excludedItemId`）。新しい名前に最も似ているのは名前を変える Item 自身なので、除かないと候補の先頭に自分が出る。
+Item の作成と、Recipe の作成・編集の材料では渡さない。材料で選んであった Item の名前を打ち直したときは、その Item が候補に出れば、元の Item に戻すという選択肢になるためである。
+
+14 で検討して採らなかった形と、その理由：
+
+- 14 で merge まで作る形（rename で別の Item と一致したら、確認のうえ1つにまとめる）
+  - まとめられない間に起きるのは、同じものが別の Item として買い物リストの別の行に出ることで、どちらも画面に出ている。品目が消えたり、黙って数量が狂ったりはしない。いちばんの欠点は、Item を消せないので、残った Item が検索や候補に出続けること
+  - 後から merge を足しても rename は変わらない。rename が一致した Item を `AlreadyExists` で返すので、確認の後に merge の UseCase を呼べば繋がる
+  - merge は、旧 Item を指すすべての Recipe を書き換える。Item から Recipe を引く読み出し（今の `RecipeRepository` には無い）と、複数の Recipe と Item を1つのトランザクションにする例外（「UseCase の方針」）が要る。旧 Item の扱いなどと合わせて、merge を作るときに決める（[spec.md](spec.md#未確定事項)）
+- rename を Recipe ごとに適用できるようにする形（材料ごとに表示名を持つ、Item を分けるなど）
+  - 1つの Recipe だけ名前を変えたいことは、Recipe の編集で材料に別の名前を入れればでき、構造を変えずに済む
+- rename の候補から、名前を変える Item を UI が外す形
+  - 候補の件数を決めるのは Finder なので、後で捨てる候補に枠を使わせない。13 で場面ごとにメソッドを分けたのと同じ理由
+
+UI を作るときに決めること：
+
+- Item の作成と rename で、入力中に同じ名前の Item が登録済みであることを知らせるか（入力を間引いて確かめ、赤文字で知らせるなど）。保存を押した後で止めるより体験がよい。決めたことは次のとおり
+  - 対象は Item の作成と rename だけ。Recipe の材料の入力は止まらずに既存の Item を使うので対象外（知らせるなら「既存の Item を使います」で、使ったことを結果で返すのと同じ話）
+  - 完全一致は AI の有無にかかわらず行う（[spec.md](spec.md#item-重複判定と-ai)）ので、AI の候補の UseCase からは判定しない。機能フラグで AI を OFF にすると知らせも消えるため
+  - UseCase の返り値は変えない。入力中に知らせても、保存までに同じ名前の Item ができうるので、作成と rename の UseCase は保存のときに確かめ直して `AlreadyExists` を返す
+  - 手段は、`SearchItemsUseCase`（部分一致なので完全一致も含む）の結果を UI が名前と比べるか、「この名前は登録済みか」を返す UseCase を足すか。前者は前後の空白を除いて比べる規則を UI も持つことになる。rename では名前を変える Item 自身を ID で外す
+- rename の画面に、名前が変わる Recipe を見せるか。見せるなら、Item から Recipe を引く読み出しを足す
+- rename の結果（`RenameItemResult.Renamed`）に、変えた後の Item を持たせ続けるか。今は持たせている。呼び出し側は、保存された表示名（前後の空白を除いたもの）を知らないため。持たせずに UI を作ると、無いことを前提に作ってしまい、要ると気づきにくい。持たせておけば、UI で使わないと分かったときに外せばよい
 
 ## AI / ML
 
@@ -350,8 +378,9 @@ PoC は完了済み。
 - Recipe の写真に関する未決定事項（詳細は [photo.md](photo.md) 参照）
 - Recipe 削除機能の実装時、編集画面からの保存によって削除済み Recipe を再作成しないようにするか。現時点では決めていない。今の実装は新規作成と同一の `save` メソッドで上書き保存する構成となっている。あわせて、Session から元の Recipe へ遷移しようとしたときに Recipe が削除されていた場合の見せ方も決める
 - 変更がない状態での保存要求時にも永続化処理を行うかどうか。現時点では無条件で保存する実装となっており、将来のサーバー同期導入時に方針を決定する
-- Item の表示名の一致判定（検索の部分一致、作成時の重複検知の完全一致）をどこで行うか。現時点では、どちらも Repository から全件を読み込み、UseCase で絞り込んでいる。Recipe の作成・編集と Session への Recipe の追加の UseCase も、材料の新しい表示名を既存の Item と照らすために、Item を全件読み込んでいる。表示名の一致の規則（何を同じ名前とみなすか）を domain に置くかも、あわせて決める。データ層の実装時に、表示名を Repository へ渡す形へ移すかを、検索と作成で揃えて決める。Web 版では全件の通信が重くなること、SQLite の `LIKE` は英字の大文字・小文字を区別せず `%` や `_` のエスケープも必要なことを踏まえる。移した場合も、前後の空白の除去と空入力の扱いは今の場所（表示名は `NotBlankString`、検索語は UseCase）に残す。あわせて、同じ表示名の Item の作成が同時に行われた場合の重複を、データ層でどう防ぐかも決める（Room の `@Transaction` で足りるか、一意制約が要るかなど）
+- Item の表示名の一致判定（検索の部分一致、作成時と rename 時の重複検知の完全一致）をどこで行うか。現時点では、いずれも Repository から全件を読み込み、UseCase で絞り込んでいる。Recipe の作成・編集と Session への Recipe の追加の UseCase も、材料の新しい表示名を既存の Item と照らすために、Item を全件読み込んでいる。表示名の一致の規則（何を同じ名前とみなすか）を domain に置くかも、あわせて決める。データ層の実装時に、表示名を Repository へ渡す形へ移すかを、検索・作成・rename で揃えて決める。Web 版では全件の通信が重くなること、SQLite の `LIKE` は英字の大文字・小文字を区別せず `%` や `_` のエスケープも必要なことを踏まえる。移した場合も、前後の空白の除去と空入力の扱いは今の場所（表示名は `NotBlankString`、検索語は UseCase）に残す。あわせて、同じ表示名の Item の作成や rename が同時に行われた場合の重複を、データ層でどう防ぐかも決める（Room の `@Transaction` で足りるか、一意制約が要るかなど）
 - Recipe の保存時や Session への Recipe の追加時に既存の Item を使ったことを、材料の行単位で返す必要があるか。現時点では、使った既存の Item の一覧だけを返している。UI の実装時に確認する
+  - Recipe の編集で、Item を選んであった材料の名前を打ち直して既存の Item と一致した場合も、今の規則どおり確認なしでその Item を使う。変わるのは編集中の Recipe のその材料だけで、元の Item もほかの Recipe も変わらないため。確認を挟みたくなっても、保存の前に UI が確かめるか、保存の後に結果で知らせるかの違いで、`EditRecipeUseCase` は変わらない
 - 保存先から集約を読み戻す方法。ShoppingSession のコンストラクタは private なので、データ層の実装時に、中身を受け取って「集約と不変条件」の規則を確かめ、満たせば集約を作り、満たさなければ null を返す生成関数を domain に足す。内訳の ID は購入済みチェックの鍵なので、読み戻しても変わらないようにする
 - SessionItem の ID を残すか。1つの Session の中では SessionItem は Item へのつながりと表示名の組で一意に決まるので、行がその組で品目を指せば ID を外せる。ただし、品目の指し方が変わる操作（Session 限定の品目を Item として登録する、Item を統合する）では、ID がある方が行を書き換えずに済む。それらの操作を決めるときにあわせて見直す。候補から Session の品目を選んだことを受け取る入力（「実装の進め方」の 13）も品目の ID で指す予定なので、ID を外すなら、その入力の指し方もあわせて見直す
 - 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合は、呼び出し側が個別に対処できることがないため、意味としては Repository の `Unexpected` に当たる。ただし `Unexpected` の中身が `Throwable` に固定されているので、データ層の実装時に見直す。ログもデータ層で残し、仕組みはそのときに決める。買い物リストの分量は表示で足すので、domain の買い物リストでは桁あふれは起きない（足し方を domain に移したら見直す。[spec.md](spec.md#買い物リスト表示)）

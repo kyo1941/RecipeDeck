@@ -3,6 +3,7 @@ package com.example.recipe_deck.usecase.item
 import com.example.recipe_deck.domain.NotBlankString
 import com.example.recipe_deck.domain.Outcome
 import com.example.recipe_deck.domain.item.Item
+import com.example.recipe_deck.domain.item.ItemId
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
@@ -11,11 +12,14 @@ class FakeDuplicateCandidateFinder : DuplicateCandidateFinder {
     var candidates: ImmutableList<DuplicateCandidate> = persistentListOf()
     var findFailure: DuplicateCandidateFinderFailure? = null
     val requestedDisplayNames = mutableListOf<NotBlankString>()
+    val requestedExcludedItemIds = mutableListOf<ItemId?>()
 
     override suspend fun findItems(
         displayName: NotBlankString,
+        excludedItemId: ItemId?,
     ): Outcome<ImmutableList<Item>, DuplicateCandidateFinderFailure> {
         requestedDisplayNames += displayName
+        requestedExcludedItemIds += excludedItemId
         findFailure?.let { return Outcome.Failure(it) }
         return Outcome.Success(itemCandidates)
     }
