@@ -19,6 +19,7 @@
 
 - Room KMP の採否と系統。MVP に含み、データ層（「実装の進め方」の 16）で決める
 - Ktor Client の採否。MVP には Ktor サーバーを含めないので、サーバーと通信するようになったときに決める
+- ViewModel・画面遷移・Material 3 のライブラリ。UI（「実装の進め方」の 17）で決める。ViewModel に Metro の `@Inject` を付けるかもあわせて決める。UseCase に付けない理由（UseCase 層を DI のライブラリに依存させない）は、外側の層の ViewModel には当たらない
 
 ## モジュール構成
 
