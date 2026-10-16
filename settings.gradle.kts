@@ -26,3 +26,4 @@ rootProject.name = "RecipeDeck"
 include(":androidApp")
 include(":shared:domain")
 include(":shared:usecase")
+include(":shared:ui")
