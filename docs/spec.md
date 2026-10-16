@@ -319,6 +319,7 @@ MVP で実用上必要なのは、次の導線である。
 - Rename：同じ Item ID の表示名を変更する操作。rename 時にも通常の重複判定 UseCase を接続してよい
 - Merge：異なる Item ID を同じ Item として扱う操作。rename 時に既存 Item との重複が見つかった場合、必要なら merge 処理へ接続できる
 - 今は merge を設けない。rename で別の Item と表示名が一致したときは、変えずにその Item があることを返すだけにする（[Item](#item)）
+- merge を設けるときも、rename で一致したら自動ではまとめず、ユーザーの確認を通してから merge に繋ぐ（[暗黙的な自動統合（silent merge）は禁止](#暗黙的な自動統合silent-mergeは禁止)）。rename の候補から Item を選んだときも同じ
 
 **AI の採否によって merge の設計を根本から変えない。**
 AI の応答が遅い場合や利用しない場合は、該当 UseCase への重複判定機能の接続を無効化すればよい。
@@ -353,6 +354,7 @@ AI の応答が遅い場合や利用しない場合は、該当 UseCase への�
 - Session 限定の品目を Item として登録できるようにするか。今は Item にしない。設ける場合は、ユーザーに Item として登録するかを尋ねる導線とし、登録しない選択肢も残す。登録したときは、その SessionItem に登録した Item へのつながりを持たせれば、Session 内の材料の行はそのまま使える。ただし、同じ Item へのつながりと同じ表示名を持つ品目が既に Session にある場合の扱い（まとめるか）は、そのときに決める
 - Session 限定の品目がある Session で、同じ表示名の Item が後からできた場合（作成のほか、rename で同じ表示名になった場合も）、その後の追加で Item を指す行と Session 限定の品目が同じ名前で並ぶ。今は許容する。追加のたびに Session 限定の品目も既存の Item と照らし直す対応を後から足せる（足した時点で完了済みの Session は直らない）。足す場合も、既存の品目の Item へのつながりを変えることになるので、自動では変えず、通知やユーザーの選択を通す（[ShoppingSession](#shoppingsession) の方針）
 - MVP に merge を含めるか。今は設けない（rename で別の Item と一致したら、変えずに知らせるだけ）。重複した Item がどのくらいできるかを、UI と重複候補の判定の具象を作って使ってから決める
+  - merge を設けるときは、下の旧 Item ID の扱いと Item の削除に加え、Session の品目が持つ旧 Item へのつながりを、まとめた先の Item に付け替えるかも決める。品目の表示名はスナップショットなので変えない（[ShoppingSession](#shoppingsession)）
 - 統合（merge）後の旧 Item ID の扱い（redirect / tombstone、undo を含む）
 - Item の削除を提供するか。提供する場合、Recipe から使われている Item をどう扱うか。Session は表示名を持つので、Item を削除しても Session の中身は変わらない。あわせて、Recipe の保存時に、材料で選ばれた既存の Item が存在するかを確かめるかも決める（現時点では、削除の手段がないため確かめていない。Session への Recipe の追加では、表示名を写すために確かめている）
 
