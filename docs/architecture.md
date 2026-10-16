@@ -31,6 +31,8 @@
 | `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui` と `:shared:usecase` に依存し、DI の組み立てを持つ。アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
 | `iosApp` | iOS アプリの入口。Gradle のモジュールではなく Xcode のプロジェクトで、`:shared:app` の framework を組み込み、その画面を表示する |
 
+DI の組み立てを `:shared:ui` ではなく `:shared:app` に置くのは、16 からデータ層の具象を組み立てる側が知る必要があるためである。`:shared:ui` に置くと、画面や ViewModel のコードからもデータ層の具象が見えてしまう。分ければ、`:shared:ui` は `:shared:usecase` にしか依存しないので、UI からデータ層の具象を使うとビルドが落ちる。
+
 `:shared:domain` と `:shared:usecase` は Android の API を使わないので、Android のターゲットを持たない。Android のターゲットを持つモジュール（`:shared:ui` など）からは、JVM のターゲットの成果物を使う。
 JVM の版は、Android のターゲットも含めて全モジュールで 11 にそろえる。Gradle を JDK 25 で動作させている場合でも、JVM のターゲットの成果物を Android のターゲットから使えるようにするためである。
 
@@ -352,6 +354,10 @@ UI を作るときに足す UseCase（今は無い）：
 - 編集する Recipe を読む
 - Session を完了する。完了できないと進行中の Session が残り続け、次の買い物を始められない。完了日時の規則（「集約と不変条件」）の扱いも、そのときに決める
 
+15 では、CMP の構成に移し、両方のアプリが共通の仮の画面を表示するところまでを作った。モジュールの分け方と依存の向きは「モジュール構成」、DI は「技術構成」、重複候補の判定の機能フラグは「AI / ML」に書いた。
+DI のグラフが組み立てるのは、候補を出さない Finder と `FindDuplicateCandidatesUseCase` だけである。ほかの UseCase は Repository の具象が要るので、16・17 で足す。グラフを実行時に作るのは、画面に UseCase を渡す 17 からで、それまでは Metro のコンパイル時の検証だけで組み立てを確かめる。
+Kotlin を 2.4.21 に上げ、Kotlin 2.2 のために置いていた制約（kotlinx-collections-immutable を 0.4.0 に留める、`Instant`・`Uuid` の `OptIn`）を外した。
+
 ## AI / ML
 
 PoC は完了済み。
@@ -410,3 +416,4 @@ PoC は完了済み。
 - SAME / NOT_SAME 判定に対するフィードバックの保存形式
 - ML の判定閾値（しきい値）
 - Android プラットフォームにおける読み仮名変換の実装方式
+- iOS の最小の版（今は 18.5。「モジュール構成」）を、配る相手などを踏まえて改めて決める
