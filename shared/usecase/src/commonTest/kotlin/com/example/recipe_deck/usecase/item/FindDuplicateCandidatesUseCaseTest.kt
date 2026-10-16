@@ -24,6 +24,22 @@ class FindDuplicateCandidatesUseCaseTest {
     }
 
     @Test
+    fun 名前を変えるItemが指定されなければ何も除かずに探す() = runTest {
+        findDuplicateCandidates("玉葱")
+
+        assertEquals(listOf<ItemId?>(null), duplicateCandidateFinder.requestedExcludedItemIds)
+    }
+
+    @Test
+    fun 名前を変えるItemが指定されたらそのItemを除いて探す() = runTest {
+        val renamingItemId = ItemId("item-kanji-onion")
+
+        findDuplicateCandidates("玉ねぎ", renamingItemId)
+
+        assertEquals(listOf<ItemId?>(renamingItemId), duplicateCandidateFinder.requestedExcludedItemIds)
+    }
+
+    @Test
     fun 入力が空白だけなら探さずに何も返さない() = runTest {
         val result = findDuplicateCandidates(" 　\n")
 

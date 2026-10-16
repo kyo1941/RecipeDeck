@@ -272,7 +272,7 @@ Session か購入の記録が読めないとき、購入の記録に書けない
 
 13 は、重複候補を求める UseCase を2つ実装した（[spec.md](spec.md#item-重複判定と-ai)）。
 
-- `FindDuplicateCandidatesUseCase`：既存の Item だけを候補にする。Item の作成と、Recipe の作成・編集の画面から使う。Recipe の材料は Item を必ず参照するので、Session の品目は候補にしない
+- `FindDuplicateCandidatesUseCase`：既存の Item だけを候補にする。Item の作成と rename、Recipe の作成・編集の画面から使う。Recipe の材料は Item を必ず参照するので、Session の品目は候補にしない
 - `FindSessionDuplicateCandidatesUseCase`：既存の Item と進行中の Session の品目を候補にする（`DuplicateCandidate.OfItem` / `OfSessionItem`）。Session へ Recipe を追加するときに使う。どの画面から追加するか（Session の画面か、Recipe の画面か）は問わない
 
 どちらも判定を `DuplicateCandidateFinder` に任せる。空白だけの入力なら判定せずに空の一覧を返し、判定に失敗したら `Unexpected` を返す。
@@ -286,7 +286,7 @@ Repository と呼ばないのは、集約の保存と読み出しを受け持つ
 失敗の返し方は、Repository と同じにする（「データ層の方針」）。具象は、使うライブラリや通信から送出される例外を捕まえて `DuplicateCandidateFinderFailure` にして返し、コルーチンの `CancellationException` は失敗にせず、そのまま再送出する。判定が遅いときに UI が呼び出しをキャンセルする（「AI / ML」）のは、キャンセルが失敗に変わらないことを前提にしている。
 具象は次を受け持つ。UseCase はこれらを持たない。
 
-- Item と進行中の Session の品目を読み、入力された表示名と比べる。進行中の Session がなければ Item だけを比べる
+- Item と進行中の Session の品目を読み、入力された表示名と比べる。進行中の Session がなければ Item だけを比べる。除く Item を渡されたら、その Item とは比べない
 - 閾値と、返す候補の件数の上限を決め、確からしい順に並べる。明らかに別物の候補は外す。返した候補のうち何件をユーザーに見せるかは UI が決める
 - 同じ表示名の Item と Session の品目がどちらも候補になる場合は、Item を返す
 - 上の規則に当たらない組み合わせで、複数の候補が当たる場合に、両方を返すか、確からしい方だけを返すか。例えば、表示名が違う Item と Session の品目（「たまねぎ」の Item と「玉ねぎ」の品目など）や、表示名が同じで Item へのつながりが違う Session の品目どうし。どちらにするかは具象を作るときに決める。推論の結果をどう解釈するかは具象の責務で、UseCase は持たない
@@ -314,6 +314,8 @@ spec の「既知の安全な候補」（別名で解決できた候補）と「
 Item 作成 UseCase と同じく Item を全件読み、変える Item と、表示名が完全一致する別の Item を探す。別の Item と一致したら保存せずに `AlreadyExists` でその Item を返し、変える Item がなければ `ItemNoLongerExists` を返す（今は Item の削除がないので起きない）。
 `ItemRepository.save` は、Recipe の保存と同じく、同じ ID の Item があれば上書きする。rename はこれを使う。
 Session には rename を反映しない（[spec.md](spec.md#shoppingsession)）ので、UseCase は Session を読まない。
+rename の画面で重複候補を求めるときは、`FindDuplicateCandidatesUseCase` に名前を変える Item の ID（`renamingItemId`）を渡し、`DuplicateCandidateFinder.findItems` はその Item を候補から除く（`excludedItemId`）。新しい名前に最も似ているのは名前を変える Item 自身なので、除かないと候補の先頭に自分が出る。
+Item の作成と、Recipe の作成・編集の材料では渡さない。材料で選んであった Item の名前を打ち直したときは、その Item が候補に出れば、元の Item に戻すという選択肢になるためである。
 
 ## AI / ML
 
