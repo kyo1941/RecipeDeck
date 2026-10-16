@@ -1,6 +1,6 @@
-# Recipe-Deck アーキテクチャ
+# RecipeDeck アーキテクチャ
 
-このファイルは Recipe-Deck の設計・技術構成の正本です。
+このファイルは RecipeDeck の設計・技術構成の正本です。
 仕様については [spec.md](spec.md) を参照してください。
 設計に関わる変更をした PR では、このファイルも同じ PR で更新します。
 
