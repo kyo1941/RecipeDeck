@@ -28,13 +28,15 @@
 | `:androidApp` | Android アプリの入口。`MainActivity` だけを置き、`:shared:app` の画面を表示する |
 | `:shared:domain` | ドメイン層の KMP モジュール。ターゲットは JVM・iosArm64・iosSimulatorArm64。パッケージは `amount` / `item` / `recipe` / `shopping`。Repository の interface もここに置く |
 | `:shared:usecase` | UseCase の KMP モジュール。`:shared:domain` に依存し、ターゲットも同じ。パッケージは `ingredient` / `item` / `recipe` / `shopping`。`ingredient` には、Recipe と Session の両方で使う材料の入力を置く |
+| `:shared:data` | データ層の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:domain` に依存し、Repository と `TransactionRunner` の具象を置く |
 | `:shared:ui` | 画面の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:usecase` に依存する。今は仮の画面だけを置く |
-| `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui` と `:shared:usecase` に依存し、DI の組み立てを持つ。アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
+| `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui`・`:shared:usecase`・`:shared:data` に依存し、DI の組み立てを持つ。アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
 | `iosApp` | iOS アプリの入口。Gradle のモジュールではなく Xcode のプロジェクトで、`:shared:app` の framework を組み込み、その画面を表示する |
 
-DI の組み立てを `:shared:ui` ではなく `:shared:app` に置くのは、16 からデータ層の具象を組み立てる側が知る必要があるためである。`:shared:ui` に置くと、画面や ViewModel のコードからもデータ層の具象が見えてしまう。分ければ、`:shared:ui` は `:shared:usecase` にしか依存しないので、UI からデータ層の具象を使うとビルドが落ちる。
+DI の組み立てを `:shared:ui` ではなく `:shared:app` に置くのは、データ層の具象（`:shared:data`）を組み立てる側が知る必要があるためである。`:shared:ui` に置くと、画面や ViewModel のコードからもデータ層の具象が見えてしまう。分ければ、`:shared:ui` は `:shared:usecase` にしか依存しないので、UI からデータ層の具象を使うとビルドが落ちる。
 
 `:shared:domain` と `:shared:usecase` は Android の API を使わないので、Android のターゲットを持たない。Android のターゲットを持つモジュール（`:shared:ui` など）からは、JVM のターゲットの成果物を使う。
+`:shared:data` は、Android でデータベースの置き場所を決めるのに Android の API（`Context`）を使うので、Android のターゲットを持つ。JVM のターゲットは持たない。アプリが動くのは Android と iOS だけで、Room の JVM の経路は iOS と同じコードなので、テストは iOS シミュレータで流せば足りるためである。iOS シミュレータでのテストが遅くて困ったときに、JVM のターゲットを足す。
 JVM の版は、Android のターゲットも含めて全モジュールで 11 にそろえる。Gradle を JDK 25 で動作させている場合でも、JVM のターゲットの成果物を Android のターゲットから使えるようにするためである。
 
 iOS の最小の版（deployment target）は 18.5 にしている。Compose Multiplatform が同梱するライブラリが 18.5 向けにビルドされており、それより下げるとリンク時に警告が出て、動くことも確かめられないためである。
