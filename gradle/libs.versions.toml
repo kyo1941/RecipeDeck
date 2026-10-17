@@ -6,12 +6,18 @@ kotlinxCollectionsImmutable = "0.5.2"
 kotlinxCoroutines = "1.11.0"
 composeMultiplatform = "1.12.2"
 metro = "1.4.5"
+ksp = "2.3.12"
+room = "3.0.3"
+sqlite = "2.7.1"
 
 [libraries]
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
 kotlinx-collections-immutable = { group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable", version.ref = "kotlinxCollectionsImmutable" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-room-runtime = { group = "androidx.room3", name = "room3-runtime", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room3", name = "room3-compiler", version.ref = "room" }
+androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "sqlite" }
 
 compose-runtime = { group = "org.jetbrains.compose.runtime", name = "runtime", version.ref = "composeMultiplatform" }
 compose-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "composeMultiplatform" }
@@ -24,4 +30,5 @@ compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMu
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 metro = { id = "dev.zacsweers.metro", version.ref = "metro" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
