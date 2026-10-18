@@ -214,7 +214,10 @@ erDiagram
 - データ層の実装では、利用する外部ライブラリから送出される例外を捕捉し、このドメイン失敗型にマッピングして返却する。これにより、UseCase 層が特定のライブラリに依存することを防ぐ
 - データ層の実装では、コルーチンの `CancellationException` を失敗型でラップせず、そのまま再送出（throw）する。失敗型にラップしてしまうと、全 UseCase 側でキャンセルの有無を個別に識別しなければならなくなるためである
 - 購入の記録は、Session と同じデータベースの別テーブルに置く。購入の記録は Session と寿命を共にし（集約は別で、Session の ID で結び付く）、削除やトランザクションを Session と一緒に扱えるため。ライブラリは未確定（Room KMP が候補。「技術構成」の未確定）で、Session を Room に置くなら購入の記録も同じ Room に置く。DataStore は採らない。保存先が2つに分かれて Session と同じトランザクションに入れられず、チェック程度の書き込み頻度では読み書きの軽さも利点にならないため。Session を Room 以外に置くことになったら、この評価をやり直す
-- `TransactionRunner` は、Room KMP の `useWriterConnection { it.immediateTransaction { … } }` で包み、`TransactionScope.rollback` を Room の `TransactionScope.rollback` へ渡す想定である。その中で Repository の実装が呼ぶ DAO が同じトランザクションに入るかは、公式ドキュメントで明記を確認できていない。Room 2.8.5 の jvm・native 向けのソースでは、DAO はコルーチンに載った接続を使い回すので入る見込みだが（`ConnectionPoolImpl.useConnection`）、Android 向けは読んでいないので、データ層の実装時に動かして確かめる。技術的に難しい場合は、トランザクションの境界とデータ層の実装を再検討する
+- `TransactionRunner` の具象（`:shared:data` の `RoomTransactionRunner`）は、Room の `withWriteTransaction`（`useWriterConnection { it.withTransaction(IMMEDIATE) { … } }`）で包み、`TransactionScope.rollback` を Room の `TransactionScope.rollback` へ渡す。その中で Repository の実装が呼ぶ DAO は、同じトランザクションに入る。Room 3 は、接続をコルーチンのコンテキストに載せて使い回すためである（`ConnectionPoolImpl.useConnection`）。公式ドキュメントには明記がないので、Android と iOS の両方でテスト（`RoomTransactionRunnerTest`）で確かめている。Android でもこの経路を通るのは、同梱の SQLite のドライバ（`BundledSQLiteDriver`）を使うためである。OS の SQLite のドライバ（`AndroidSQLiteDriver`）では、トランザクションをスレッドに縛る別の経路になる。ドライバを変えるときは、このテストを Android の端末で流し直す
+  - Room が投げる例外は `TransactionRunnerFailure` にして返し、`CancellationException` は再送出する。狙いは、データベースを開く・トランザクションを始める・確定するときの例外である
+  - ブロックの中で投げられた例外（Repository の実装の捕まえ忘れや、UseCase のコードの不具合）も、取り消したうえで失敗として返す。ブロックの例外と Room の例外を外から見分けるには、例外を包んで外す処理が要り、具象が読みにくくなるためである。どちらでも書き込みは取り消され、違いはユーザーに見えるのが「落ちる」か「保存できなかったと出る」かなので、落とさない方を選ぶ。不具合は、捕まえた例外をログに残して見つける（ログの仕組みは未確定事項）
+  - テストでは、テストのソースセットにだけ置くテスト用のテーブルとデータベースを使う。確かめるのはトランザクションの約束で、製品のテーブルの形とは関係がないため、製品のテーブルができても置き換えない
 
 ## 実装の進め方
 
@@ -411,7 +414,7 @@ PoC は完了済み。
   - Recipe の編集で、Item を選んであった材料の名前を打ち直して既存の Item と一致した場合も、今の規則どおり確認なしでその Item を使う。変わるのは編集中の Recipe のその材料だけで、元の Item もほかの Recipe も変わらないため。確認を挟みたくなっても、保存の前に UI が確かめるか、保存の後に結果で知らせるかの違いで、`EditRecipeUseCase` は変わらない
 - 保存先から集約を読み戻す方法。ShoppingSession のコンストラクタは private なので、データ層の実装時に、中身を受け取って「集約と不変条件」の規則を確かめ、満たせば集約を作り、満たさなければ null を返す生成関数を domain に足す。内訳の ID は購入済みチェックの鍵なので、読み戻しても変わらないようにする
 - SessionItem の ID を残すか。1つの Session の中では SessionItem は Item へのつながりと表示名の組で一意に決まるので、行がその組で品目を指せば ID を外せる。ただし、品目の指し方が変わる操作（Session 限定の品目を Item として登録する、Item を統合する）では、ID がある方が行を書き換えずに済む。それらの操作を決めるときにあわせて見直す。候補から Session の品目を選んだことを受け取る入力（「実装の進め方」の 13）も品目の ID で指す予定なので、ID を外すなら、その入力の指し方もあわせて見直す
-- 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合は、呼び出し側が個別に対処できることがないため、意味としては Repository の `Unexpected` に当たる。ただし `Unexpected` の中身が `Throwable` に固定されているので、データ層の実装時に見直す。ログもデータ層で残し、仕組みはそのときに決める。買い物リストの分量は表示で足すので、domain の買い物リストでは桁あふれは起きない（足し方を domain に移したら見直す。[spec.md](spec.md#買い物リスト表示)）
+- 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合は、呼び出し側が個別に対処できることがないため、意味としては Repository の `Unexpected` に当たる。ただし `Unexpected` の中身が `Throwable` に固定されているので、データ層の実装時に見直す。ログもデータ層で残し、仕組みはそのときに決める。`RoomTransactionRunner` が捕まえた例外も、同じ仕組みでログに残す。ブロックの中の不具合も失敗に紛れるため（「データ層の方針」）。買い物リストの分量は表示で足すので、domain の買い物リストでは桁あふれは起きない（足し方を domain に移したら見直す。[spec.md](spec.md#買い物リスト表示)）
 - 同じ端末で Session への追加が同時に走った場合（連打など）の扱い。UseCase は進行中の Session を読んでから保存するため、片方の追加が失われるか、データ層の一意制約で失敗しうる。データ層の実装時に決める
   - 1つの集約の中の読み書きなので、`TransactionRunner`（複数の集約を1つのトランザクションにまとめるためのもの）を広げるより、楽観ロック（版の番号を持たせ、保存のときに違えば失敗にする）か、Repository に変え方を渡して中で1つのトランザクションにする形を先に検討する
   - 購入の記録は別の集約なので、この問題の対象外（「集約と不変条件」）

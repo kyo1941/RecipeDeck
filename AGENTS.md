@@ -11,6 +11,7 @@
 ```sh
 ./gradlew :shared:domain:jvmTest :shared:domain:iosSimulatorArm64Test
 ./gradlew :shared:usecase:jvmTest :shared:usecase:iosSimulatorArm64Test
+./gradlew :shared:data:iosSimulatorArm64Test
 ./gradlew :shared:domain:compileKotlinIosArm64 :shared:usecase:compileKotlinIosArm64 :shared:data:compileKotlinIosArm64 :shared:ui:compileKotlinIosArm64 :shared:app:compileKotlinIosArm64
 ./gradlew :androidApp:assembleDebug
 ```
@@ -19,4 +20,10 @@ iOS アプリのビルドは時間がかかるので、PR の前と、ビルド�
 
 ```sh
 xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios-derived CODE_SIGNING_ALLOWED=NO build
+```
+
+Android の端末テストはエミュレータか実機が要るので、PR の前と、`:shared:data` のトランザクションやドライバに関わる変更をしたときに流す。
+
+```sh
+./gradlew :shared:data:connectedAndroidDeviceTest
 ```
