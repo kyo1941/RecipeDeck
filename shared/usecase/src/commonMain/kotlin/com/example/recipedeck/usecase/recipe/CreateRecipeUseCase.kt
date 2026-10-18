@@ -3,6 +3,7 @@ package com.example.recipedeck.usecase.recipe
 import com.example.recipedeck.domain.NotBlankString
 import com.example.recipedeck.domain.Outcome
 import com.example.recipedeck.domain.TransactionRunner
+import com.example.recipedeck.domain.TransactionRunnerFailure
 import com.example.recipedeck.domain.item.Item
 import com.example.recipedeck.domain.item.ItemRepository
 import com.example.recipedeck.domain.item.ItemRepositoryFailure
@@ -32,7 +33,7 @@ class CreateRecipeUseCase(
             .takeIf { it.isNotEmpty() }
             ?.let { return CreateRecipeResult.IngredientDisplayNameRequired(it.toImmutableList()) }
 
-        return transactionRunner.run {
+        val outcome = transactionRunner.run {
             val existingItems = when (val found = itemRepository.findAll()) {
                 is Outcome.Success -> found.value.associateBy { it.displayName }
                 is Outcome.Failure -> rollback(found.error.toCreateRecipeResult())
@@ -60,6 +61,10 @@ class CreateRecipeUseCase(
                 is Outcome.Failure -> rollback(saved.error.toCreateRecipeResult())
             }
         }
+        return when (outcome) {
+            is Outcome.Success -> outcome.value
+            is Outcome.Failure -> outcome.error.toCreateRecipeResult()
+        }
     }
 
     private fun RecipeRepositoryFailure.toCreateRecipeResult(): CreateRecipeResult = when (this) {
@@ -68,6 +73,10 @@ class CreateRecipeUseCase(
 
     private fun ItemRepositoryFailure.toCreateRecipeResult(): CreateRecipeResult = when (this) {
         is ItemRepositoryFailure.Unexpected -> CreateRecipeResult.Unexpected(cause)
+    }
+
+    private fun TransactionRunnerFailure.toCreateRecipeResult(): CreateRecipeResult = when (this) {
+        is TransactionRunnerFailure.Unexpected -> CreateRecipeResult.Unexpected(cause)
     }
 }
 

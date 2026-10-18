@@ -1,19 +1,23 @@
 package com.example.recipedeck.usecase
 
+import com.example.recipedeck.domain.Outcome
 import com.example.recipedeck.domain.TransactionRunner
+import com.example.recipedeck.domain.TransactionRunnerFailure
 import com.example.recipedeck.domain.TransactionScope
 
 class FakeTransactionRunner : TransactionRunner {
     var rolledBack = false
         private set
+    var runFailure: TransactionRunnerFailure? = null
 
-    override suspend fun <T> run(block: suspend TransactionScope<T>.() -> T): T {
+    override suspend fun <T> run(block: suspend TransactionScope<T>.() -> T): Outcome<T, TransactionRunnerFailure> {
+        runFailure?.let { return Outcome.Failure(it) }
         val scope = FakeTransactionScope<T>()
         return try {
-            scope.block()
+            Outcome.Success(scope.block())
         } catch (_: RollbackSignal) {
             rolledBack = true
-            scope.rollbackResults.single()
+            Outcome.Success(scope.rollbackResults.single())
         }
     }
 }

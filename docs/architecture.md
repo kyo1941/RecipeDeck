@@ -200,6 +200,7 @@ erDiagram
   - 入力の段階で名前を確かめない（名前がない行を null で受け取らない）のは、null が「何もない」ではなく「空白を打った」という経緯を背負い、既存の Item を選んだか名前を打ったかの区別に紛れ込むためである
 - 1つのトランザクションでは、1つの集約だけを変更することを原則とする。Recipe の作成・編集は例外で、材料の入力と同時に新しい Item を作るという UI の都合から、新しい Item と Recipe を `TransactionRunner` で1つのトランザクションにまとめる。集約の境界は変えない（Item は複数の Recipe や Session から共有され、寿命も Recipe と異なるため）
   - 取り消すかどうかは、使う側が `TransactionScope.rollback` で指示する。Repository は失敗を例外ではなく `Outcome.Failure` で返すため、`TransactionRunner` が結果を見て自動で取り消すことはしない
+  - `TransactionRunner` 自体の失敗（データベースを開けない、トランザクションを始められない、確定できない）は、`Outcome.Failure`（`TransactionRunnerFailure`）で返す。Repository と同じく、外部のライブラリの例外を UseCase に漏らさず、扱い漏れをコンパイラで見つけるためである。`rollback` で取り消したときの結果は、ブロックが返した結果と同じく `Outcome.Success` で返す。取り消しは使う側が選んだ結果で、失敗ではないため
   - 「Recipe の保存に失敗したら、そのとき作った Item も残さない」（[spec.md](spec.md#材料の-item-参照)）は、同じトランザクションにして守る。保存は Item を先、Recipe を後にする。仮に同じトランザクションにできない不具合があっても、残るのは単独の Item だけになり、存在しない Item を参照する Recipe は残らないようにするため。同じトランザクションにできないと分かったら、「データ層の方針」の `TransactionRunner` の項のとおり再検討する
 - Session への Recipe の追加は、書き込みが Session の Repository への1回だけなので、`TransactionRunner` を使わない。Session 内の複数のテーブルへの書き込みは、Repository の実装の中でデータベースのトランザクションにまとめる
 

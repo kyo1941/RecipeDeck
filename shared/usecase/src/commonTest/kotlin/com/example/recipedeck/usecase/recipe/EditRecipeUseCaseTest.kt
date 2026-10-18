@@ -1,5 +1,6 @@
 package com.example.recipedeck.usecase.recipe
 
+import com.example.recipedeck.domain.TransactionRunnerFailure
 import com.example.recipedeck.domain.amount.Amount
 import com.example.recipedeck.domain.amount.AmountUnit
 import com.example.recipedeck.domain.amount.Quantity
@@ -267,5 +268,22 @@ class EditRecipeUseCaseTest {
 
         assertEquals(EditRecipeResult.Unexpected(cause), result)
         assertTrue(transactionRunner.rolledBack)
+    }
+
+    @Test
+    fun トランザクションが失敗したら原因を持った予期しない失敗を返す() = runTest {
+        recipeRepository.savedRecipes += recipe
+        val cause = IllegalStateException("データベースを開けない")
+        transactionRunner.runFailure = TransactionRunnerFailure.Unexpected(cause)
+
+        val result = editRecipe(
+            recipeId = recipe.id,
+            name = "麻婆豆腐",
+            status = RecipeStatus.DRAFT,
+            memo = "",
+            ingredients = listOf(ingredient(ItemInput.Typed("長ネギ"))),
+        )
+
+        assertEquals(EditRecipeResult.Unexpected(cause), result)
     }
 }
