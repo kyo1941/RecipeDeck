@@ -14,10 +14,11 @@
 - Ktor サーバーは MVP に含めない。複数端末での共有、端末の移行、重複判定のモデルをサーバーで推論する場合（[AI / ML](#ai--ml)）、データのバックアップで要る想定で、どれも MVP に必須ではないため
 - DI は Metro を使う。組み立てられない依存をコンパイルで見つけられるため。実行時に組み立てる方式では、その依存を使う画面を開くまで誤りに気づけない
   - UseCase には `@Inject` を付けず、`:shared:app` の組み立てに UseCase ごとの作り方（`@Provides`）を書く。UseCase 層を DI のライブラリに依存させないためで、外部のライブラリの例外を data で失敗型に変える（「データ層の方針」）のと同じ考えによる。作り方の書き漏れは Metro がコンパイルで見つける
+- Android と iOS のローカルの保存は Room 3（`androidx.room3`）を使う。Room 2 系（`androidx.room`）も KMP に対応しているが、Room 3 はドライバ（`SQLiteDriver`）を必須にして、Android だけの古い経路（SupportSQLite）を外した。そのため、Android と iOS で同じコードの経路を通しやすい。コードの生成には KSP を使う
+  - ドライバは、Android・iOS とも、アプリに同梱する SQLite（`BundledSQLiteDriver`）を使う。OS の SQLite を使うドライバ（`AndroidSQLiteDriver`）では、Room 2 と同じく、トランザクションをスレッドに縛る Android だけの経路になり（「データ層の方針」）、SQLite の版も OS の版で変わる（minSdk 24 の端末では古い）。代わりに、アプリのサイズが同梱の SQLite の分だけ増える
 
 未確定：
 
-- Room KMP の採否と系統。MVP に含み、データ層（「実装の進め方」の 16）で決める
 - Ktor Client の採否。MVP には Ktor サーバーを含めないので、サーバーと通信するようになったときに決める
 - ViewModel・画面遷移・Material 3 のライブラリ。UI（「実装の進め方」の 17）で決める。ViewModel に Metro の `@Inject` を付けるかもあわせて決める。UseCase に付けない理由（UseCase 層を DI のライブラリに依存させない）は、外側の層の ViewModel には当たらない
 
@@ -28,13 +29,15 @@
 | `:androidApp` | Android アプリの入口。`MainActivity` だけを置き、`:shared:app` の画面を表示する |
 | `:shared:domain` | ドメイン層の KMP モジュール。ターゲットは JVM・iosArm64・iosSimulatorArm64。パッケージは `amount` / `item` / `recipe` / `shopping`。Repository の interface もここに置く |
 | `:shared:usecase` | UseCase の KMP モジュール。`:shared:domain` に依存し、ターゲットも同じ。パッケージは `ingredient` / `item` / `recipe` / `shopping`。`ingredient` には、Recipe と Session の両方で使う材料の入力を置く |
+| `:shared:data` | データ層の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:domain` に依存し、Repository と `TransactionRunner` の具象を置く |
 | `:shared:ui` | 画面の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:usecase` に依存する。今は仮の画面だけを置く |
-| `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui` と `:shared:usecase` に依存し、DI の組み立てを持つ。アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
+| `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui`・`:shared:usecase`・`:shared:data` に依存し、DI の組み立てを持つ。アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
 | `iosApp` | iOS アプリの入口。Gradle のモジュールではなく Xcode のプロジェクトで、`:shared:app` の framework を組み込み、その画面を表示する |
 
-DI の組み立てを `:shared:ui` ではなく `:shared:app` に置くのは、16 からデータ層の具象を組み立てる側が知る必要があるためである。`:shared:ui` に置くと、画面や ViewModel のコードからもデータ層の具象が見えてしまう。分ければ、`:shared:ui` は `:shared:usecase` にしか依存しないので、UI からデータ層の具象を使うとビルドが落ちる。
+DI の組み立てを `:shared:ui` ではなく `:shared:app` に置くのは、データ層の具象（`:shared:data`）を組み立てる側が知る必要があるためである。`:shared:ui` に置くと、画面や ViewModel のコードからもデータ層の具象が見えてしまう。分ければ、`:shared:ui` は `:shared:usecase` にしか依存しないので、UI からデータ層の具象を使うとビルドが落ちる。
 
 `:shared:domain` と `:shared:usecase` は Android の API を使わないので、Android のターゲットを持たない。Android のターゲットを持つモジュール（`:shared:ui` など）からは、JVM のターゲットの成果物を使う。
+`:shared:data` は、Android でデータベースの置き場所を決めるのに Android の API（`Context`）を使うので、Android のターゲットを持つ。JVM のターゲットは持たない。アプリが動くのは Android と iOS だけで、Room の JVM の経路は iOS と同じコードなので、テストは iOS シミュレータで流せば足りるためである。iOS シミュレータでのテストが遅くて困ったときに、JVM のターゲットを足す。
 JVM の版は、Android のターゲットも含めて全モジュールで 11 にそろえる。Gradle を JDK 25 で動作させている場合でも、JVM のターゲットの成果物を Android のターゲットから使えるようにするためである。
 
 iOS の最小の版（deployment target）は 18.5 にしている。Compose Multiplatform が同梱するライブラリが 18.5 向けにビルドされており、それより下げるとリンク時に警告が出て、動くことも確かめられないためである。
@@ -198,6 +201,7 @@ erDiagram
   - 入力の段階で名前を確かめない（名前がない行を null で受け取らない）のは、null が「何もない」ではなく「空白を打った」という経緯を背負い、既存の Item を選んだか名前を打ったかの区別に紛れ込むためである
 - 1つのトランザクションでは、1つの集約だけを変更することを原則とする。Recipe の作成・編集は例外で、材料の入力と同時に新しい Item を作るという UI の都合から、新しい Item と Recipe を `TransactionRunner` で1つのトランザクションにまとめる。集約の境界は変えない（Item は複数の Recipe や Session から共有され、寿命も Recipe と異なるため）
   - 取り消すかどうかは、使う側が `TransactionScope.rollback` で指示する。Repository は失敗を例外ではなく `Outcome.Failure` で返すため、`TransactionRunner` が結果を見て自動で取り消すことはしない
+  - `TransactionRunner` 自体の失敗（データベースを開けない、トランザクションを始められない、確定できない）は、`Outcome.Failure`（`TransactionRunnerFailure`）で返す。Repository と同じく、外部のライブラリの例外を UseCase に漏らさず、扱い漏れをコンパイラで見つけるためである。`rollback` で取り消したときの結果は、ブロックが返した結果と同じく `Outcome.Success` で返す。取り消しは使う側が選んだ結果で、失敗ではないため
   - 「Recipe の保存に失敗したら、そのとき作った Item も残さない」（[spec.md](spec.md#材料の-item-参照)）は、同じトランザクションにして守る。保存は Item を先、Recipe を後にする。仮に同じトランザクションにできない不具合があっても、残るのは単独の Item だけになり、存在しない Item を参照する Recipe は残らないようにするため。同じトランザクションにできないと分かったら、「データ層の方針」の `TransactionRunner` の項のとおり再検討する
 - Session への Recipe の追加は、書き込みが Session の Repository への1回だけなので、`TransactionRunner` を使わない。Session 内の複数のテーブルへの書き込みは、Repository の実装の中でデータベースのトランザクションにまとめる
 
@@ -210,8 +214,11 @@ erDiagram
 - Repository 起因の失敗は、Repository ごとに定義した sealed interface（例: `RecipeRepositoryFailure`）で表現する。これは技術的要因に基づく分類であり、UI 層の関心事とは完全に分離されている。受け取る側の扱いは「UseCase の方針」に従う。今は Repository ごとに1つの型とし、メソッドによって発生しうる失敗の種類がずれてきたら、メソッドごとに型を分ける
 - データ層の実装では、利用する外部ライブラリから送出される例外を捕捉し、このドメイン失敗型にマッピングして返却する。これにより、UseCase 層が特定のライブラリに依存することを防ぐ
 - データ層の実装では、コルーチンの `CancellationException` を失敗型でラップせず、そのまま再送出（throw）する。失敗型にラップしてしまうと、全 UseCase 側でキャンセルの有無を個別に識別しなければならなくなるためである
-- 購入の記録は、Session と同じデータベースの別テーブルに置く。購入の記録は Session と寿命を共にし（集約は別で、Session の ID で結び付く）、削除やトランザクションを Session と一緒に扱えるため。ライブラリは未確定（Room KMP が候補。「技術構成」の未確定）で、Session を Room に置くなら購入の記録も同じ Room に置く。DataStore は採らない。保存先が2つに分かれて Session と同じトランザクションに入れられず、チェック程度の書き込み頻度では読み書きの軽さも利点にならないため。Session を Room 以外に置くことになったら、この評価をやり直す
-- `TransactionRunner` は、Room KMP の `useWriterConnection { it.immediateTransaction { … } }` で包み、`TransactionScope.rollback` を Room の `TransactionScope.rollback` へ渡す想定である。その中で Repository の実装が呼ぶ DAO が同じトランザクションに入るかは、公式ドキュメントで明記を確認できていない。Room 2.8.5 の jvm・native 向けのソースでは、DAO はコルーチンに載った接続を使い回すので入る見込みだが（`ConnectionPoolImpl.useConnection`）、Android 向けは読んでいないので、データ層の実装時に動かして確かめる。技術的に難しい場合は、トランザクションの境界とデータ層の実装を再検討する
+- 購入の記録は、Session と同じデータベースの別テーブルに置く。購入の記録は Session と寿命を共にし（集約は別で、Session の ID で結び付く）、削除やトランザクションを Session と一緒に扱えるため。Session も購入の記録も Room に置く（「技術構成」）。DataStore は採らない。保存先が2つに分かれて Session と同じトランザクションに入れられず、チェック程度の書き込み頻度では読み書きの軽さも利点にならないため。Session を Room 以外に置くことになったら、この評価をやり直す
+- `TransactionRunner` の具象（`:shared:data` の `RoomTransactionRunner`）は、Room の `withWriteTransaction`（`useWriterConnection { it.withTransaction(IMMEDIATE) { … } }`）で包み、`TransactionScope.rollback` を Room の `TransactionScope.rollback` へ渡す。その中で Repository の実装が呼ぶ DAO は、同じトランザクションに入る。Room 3 は、接続をコルーチンのコンテキストに載せて使い回すためである（`ConnectionPoolImpl.useConnection`）。公式ドキュメントには明記がないので、Android と iOS の両方でテスト（`RoomTransactionRunnerTest`）で確かめている。Android でもこの経路を通るのは、同梱の SQLite のドライバ（`BundledSQLiteDriver`）を使うためである。OS の SQLite のドライバ（`AndroidSQLiteDriver`）では、トランザクションをスレッドに縛る別の経路になる。ドライバを変えるときは、このテストを Android の端末で流し直す
+  - Room が投げる例外は `TransactionRunnerFailure` にして返し、`CancellationException` は再送出する。狙いは、データベースを開く・トランザクションを始める・確定するときの例外である
+  - ブロックの中で投げられた例外（Repository の実装の捕まえ忘れや、UseCase のコードの不具合）も、取り消したうえで失敗として返す。ブロックの例外と Room の例外を外から見分けるには、例外を包んで外す処理が要り、具象が読みにくくなるためである。どちらでも書き込みは取り消され、違いはユーザーに見えるのが「落ちる」か「保存できなかったと出る」かなので、落とさない方を選ぶ。不具合は、捕まえた例外をログに残して見つける（ログの仕組みは未確定事項）
+  - テストでは、テストのソースセットにだけ置くテスト用のテーブルとデータベースを使う。確かめるのはトランザクションの約束で、製品のテーブルの形とは関係がないため、製品のテーブルができても置き換えない
 
 ## 実装の進め方
 
@@ -232,7 +239,7 @@ erDiagram
 13. Item 重複候補判定を UseCase へ接続
 14. rename / merge を必要な範囲で追加
 15. 土台（CMP の構成への移行、DI、Kotlin の版）
-16. データ層（Room KMP による Repository と `TransactionRunner` の具象）
+16. データ層（Room による Repository と `TransactionRunner` の具象）
 17. UI（画面の流れごとに分けて進める）
 
 1〜3 および 6〜9 は、ドメイン層の型として実装済み。
@@ -346,7 +353,7 @@ UI を作るときに決めること：
 - rename の結果（`RenameItemResult.Renamed`）に、変えた後の Item を持たせ続けるか。今は持たせている。呼び出し側は、保存された表示名（前後の空白を除いたもの）を知らないため。持たせずに UI を作ると、無いことを前提に作ってしまい、要ると気づきにくい。持たせておけば、UI で使わないと分かったときに外せばよい
 
 15〜17 では、spec の代表フロー（[spec.md](spec.md#プロダクトの中核)）を、Android と iOS の両方でアプリを起動して端から端まで動かせるところまで作る。どちらかのプラットフォームを先に仕上げることはしない。
-順序を土台、データ層、UI にするのは、`TransactionRunner` の想定（「データ層の方針」）を Android でまだ確かめておらず、成り立たなければ UseCase に跳ね返りうるためである。UI は UseCase を通してしかデータ層に触れないので、設計の上ではどちらを先に作ってもよい。
+順序を土台、データ層、UI にしたのは、`TransactionRunner` の想定（「データ層の方針」）を Android でまだ確かめておらず、成り立たなければ UseCase に跳ね返りうるためだった。想定は 16 の最初に確かめ、成り立った。UI は UseCase を通してしかデータ層に触れないので、設計の上ではどちらを先に作ってもよい。
 写真、merge、Web 版は、15〜17 では扱わない。重複候補の判定の具象（AI）を MVP に含めるかは、別に決める。
 
 UI を作るときに足す UseCase（今は無い）：
@@ -358,6 +365,14 @@ UI を作るときに足す UseCase（今は無い）：
 15 では、CMP の構成に移し、両方のアプリが共通の仮の画面を表示するところまでを作った。モジュールの分け方と依存の向きは「モジュール構成」、DI は「技術構成」、重複候補の判定の機能フラグは「AI / ML」に書いた。
 DI のグラフが組み立てるのは、候補を出さない Finder と `FindDuplicateCandidatesUseCase` だけである。ほかの UseCase は Repository の具象が要るので、16・17 で足す。グラフを実行時に作るのは、画面に UseCase を渡す 17 からで、それまでは Metro のコンパイル時の検証だけで組み立てを確かめる。
 Kotlin を 2.4.21 に上げ、Kotlin 2.2 のために置いていた制約（kotlinx-collections-immutable を 0.4.0 に留める、`Instant`・`Uuid` の `OptIn`）を外した。
+
+16 は、1回に考える論点を絞るため、次のように分けて進める。Repository の具象を DI のグラフに足すのは、それぞれの中で行う。
+
+- 16-1：`:shared:data` を作り、Room 3 と `TransactionRunner` の具象を入れる
+- 16-2：Item と Recipe の Repository
+- 16-3：ShoppingSession と購入の記録の Repository
+
+16-1 では、`TransactionRunner` の具象を作り、DAO が同じトランザクションに入ることを Android と iOS のテストで確かめた。製品のテーブルはまだ無い。あわせて、`TransactionRunner` 自体の失敗を `Outcome` で返すようにした（「UseCase の方針」）。
 
 ## AI / ML
 
@@ -393,11 +408,9 @@ PoC は完了済み。
 実装開始前にすべてを確定させるのではなく、UseCase を順次実装していく中で具体的に必要性が生じた段階で相談・決定する。
 
 - Repository の分け方
-- ローカルの保存方式（Room KMP など）と、プラットフォームごとの Repository の実装
+- Web 版など、Android と iOS 以外の Repository の実装。Android と iOS のローカルの保存は Room 3（「技術構成」）
 - Room のテーブル・主キー・インデックス。Recipe の材料の行の主キー（行ごとの固有 ID か、所属と並び順か）もあわせて決める。domain の Recipe の材料の行は ID を持たない（「集約と不変条件」参照）
 - 購入の記録の保存の具象（「データ層の方針」）で、データ層の実装時に確かめること
-  - Room を採る場合の系統（`androidx.room` 2.8 系か `androidx.room3` か）と、Kotlin・KSP・iOS 向けビルドとの互換。Session も同じデータベースに置くので、購入の記録だけの論点ではない
-  - 選んだ系統でも `TransactionRunner` の想定（「データ層の方針」）の書き方が使えるか
   - 購入の記録だけが読めない失敗が起きうるか。起きうるなら、買い物リストを出すときに全体を `Unexpected` にする扱い（「実装の進め方」の 12）を見直す
   - 購入の記録の読み込みに、Repository の中でメモリのキャッシュを持たせるか。持たせる場合も、書き込みは保存し終えてから完了とする（裏で書くと、タスクキルで消える）
 - Recipe の写真に関する未決定事項（詳細は [photo.md](photo.md) 参照）
@@ -408,7 +421,7 @@ PoC は完了済み。
   - Recipe の編集で、Item を選んであった材料の名前を打ち直して既存の Item と一致した場合も、今の規則どおり確認なしでその Item を使う。変わるのは編集中の Recipe のその材料だけで、元の Item もほかの Recipe も変わらないため。確認を挟みたくなっても、保存の前に UI が確かめるか、保存の後に結果で知らせるかの違いで、`EditRecipeUseCase` は変わらない
 - 保存先から集約を読み戻す方法。ShoppingSession のコンストラクタは private なので、データ層の実装時に、中身を受け取って「集約と不変条件」の規則を確かめ、満たせば集約を作り、満たさなければ null を返す生成関数を domain に足す。内訳の ID は購入済みチェックの鍵なので、読み戻しても変わらないようにする
 - SessionItem の ID を残すか。1つの Session の中では SessionItem は Item へのつながりと表示名の組で一意に決まるので、行がその組で品目を指せば ID を外せる。ただし、品目の指し方が変わる操作（Session 限定の品目を Item として登録する、Item を統合する）では、ID がある方が行を書き換えずに済む。それらの操作を決めるときにあわせて見直す。候補から Session の品目を選んだことを受け取る入力（「実装の進め方」の 13）も品目の ID で指す予定なので、ID を外すなら、その入力の指し方もあわせて見直す
-- 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合は、呼び出し側が個別に対処できることがないため、意味としては Repository の `Unexpected` に当たる。ただし `Unexpected` の中身が `Throwable` に固定されているので、データ層の実装時に見直す。ログもデータ層で残し、仕組みはそのときに決める。買い物リストの分量は表示で足すので、domain の買い物リストでは桁あふれは起きない（足し方を domain に移したら見直す。[spec.md](spec.md#買い物リスト表示)）
+- 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合は、呼び出し側が個別に対処できることがないため、意味としては Repository の `Unexpected` に当たる。ただし `Unexpected` の中身が `Throwable` に固定されているので、データ層の実装時に見直す。ログもデータ層で残し、仕組みはそのときに決める。`RoomTransactionRunner` が捕まえた例外も、同じ仕組みでログに残す。ブロックの中の不具合も失敗に紛れるため（「データ層の方針」）。買い物リストの分量は表示で足すので、domain の買い物リストでは桁あふれは起きない（足し方を domain に移したら見直す。[spec.md](spec.md#買い物リスト表示)）
 - 同じ端末で Session への追加が同時に走った場合（連打など）の扱い。UseCase は進行中の Session を読んでから保存するため、片方の追加が失われるか、データ層の一意制約で失敗しうる。データ層の実装時に決める
   - 1つの集約の中の読み書きなので、`TransactionRunner`（複数の集約を1つのトランザクションにまとめるためのもの）を広げるより、楽観ロック（版の番号を持たせ、保存のときに違えば失敗にする）か、Repository に変え方を渡して中で1つのトランザクションにする形を先に検討する
   - 購入の記録は別の集約なので、この問題の対象外（「集約と不変条件」）

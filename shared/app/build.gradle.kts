@@ -31,6 +31,7 @@ kotlin {
         commonMain.dependencies {
             implementation(project(":shared:ui"))
             implementation(project(":shared:usecase"))
+            implementation(project(":shared:data"))
             implementation(libs.compose.runtime)
         }
         iosMain.dependencies {
