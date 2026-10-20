@@ -13,12 +13,9 @@ class CreateItemUseCase(
     suspend operator fun invoke(displayName: String): CreateItemResult {
         val itemDisplayName = NotBlankString.of(displayName) ?: return CreateItemResult.DisplayNameRequired
 
-        val existingItems = when (val found = itemRepository.findAll()) {
-            is Outcome.Success -> found.value
+        when (val found = itemRepository.findByDisplayName(itemDisplayName)) {
+            is Outcome.Success -> found.value?.let { return CreateItemResult.AlreadyExists(it) }
             is Outcome.Failure -> return found.error.toCreateItemResult()
-        }
-        existingItems.firstOrNull { it.displayName == itemDisplayName }?.let {
-            return CreateItemResult.AlreadyExists(it)
         }
 
         val item = Item(

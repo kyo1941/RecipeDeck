@@ -15,6 +15,8 @@ import com.example.recipedeck.domain.shopping.ShoppingSession
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepository
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepositoryFailure
 import com.example.recipedeck.usecase.ingredient.ItemInput
+import com.example.recipedeck.usecase.ingredient.selectedItemIds
+import com.example.recipedeck.usecase.ingredient.typedDisplayNames
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.time.Clock
@@ -41,12 +43,15 @@ class AddRecipeToShoppingSessionUseCase(
         }
         if (recipe.status == RecipeStatus.DRAFT) return AddRecipeToShoppingSessionResult.RecipeIsDraft
 
-        val existingItems = when (val found = itemRepository.findAll()) {
-            is Outcome.Success -> found.value
+        val ingredientInputs = ingredients.map { it.ingredient }
+        val existingItemsById = when (val found = itemRepository.findByIds(ingredientInputs.selectedItemIds())) {
+            is Outcome.Success -> found.value.associateBy { it.id }
             is Outcome.Failure -> return found.error.toAddRecipeToShoppingSessionResult()
         }
-        val existingItemsById = existingItems.associateBy { it.id }
-        val existingItemsByDisplayName = existingItems.associateBy { it.displayName }
+        val existingItemsByDisplayName = when (val found = itemRepository.findByDisplayNames(ingredientInputs.typedDisplayNames())) {
+            is Outcome.Success -> found.value.associateBy { it.displayName }
+            is Outcome.Failure -> return found.error.toAddRecipeToShoppingSessionResult()
+        }
 
         val matchedExistingItems = mutableSetOf<Item>()
         val missingSelectedIndexes = mutableListOf<Int>()

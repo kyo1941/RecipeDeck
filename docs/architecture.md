@@ -325,7 +325,7 @@ spec の「既知の安全な候補」（別名で解決できた候補）と「
   - Item へのつながりのない Session 限定の品目は、この条件では1つに決まらないので、結局は品目を選ぶ入力が要る
 
 14 は、Item の表示名を変える UseCase（`RenameItemUseCase`）を実装した。merge は作っていない（[spec.md](spec.md#未確定事項)）。
-Item 作成 UseCase と同じく Item を全件読み、変える Item と、表示名が完全一致する別の Item を探す。別の Item と一致したら保存せずに `AlreadyExists` でその Item を返し、変える Item がなければ `ItemNoLongerExists` を返す（今は Item の削除がないので起きない）。
+変える Item を ID で、新しい表示名の Item を表示名で読み、表示名が完全一致する別の Item があるかを確かめる。別の Item と一致したら保存せずに `AlreadyExists` でその Item を返し、変える Item がなければ `ItemNoLongerExists` を返す（今は Item の削除がないので起きない）。
 `ItemRepository.save` は、Recipe の保存と同じく、同じ ID の Item があれば上書きする。rename はこれを使う。
 Session には rename を反映しない（[spec.md](spec.md#shoppingsession)）ので、UseCase は Session を読まない。
 rename の画面で重複候補を求めるときは、`FindDuplicateCandidatesUseCase` に名前を変える Item の ID（`renamingItemId`）を渡し、`DuplicateCandidateFinder.findItems` はその Item を候補から除く（`excludedItemId`）。新しい名前に最も似ているのは名前を変える Item 自身なので、除かないと候補の先頭に自分が出る。
@@ -374,6 +374,17 @@ Kotlin を 2.4.21 に上げ、Kotlin 2.2 のために置いていた制約（kot
 
 16-1 では、`TransactionRunner` の具象を作り、DAO が同じトランザクションに入ることを Android と iOS のテストで確かめた。製品のテーブルはまだ無い。あわせて、`TransactionRunner` 自体の失敗を `Outcome` で返すようにした（「UseCase の方針」）。
 
+16-2 では、`ItemRepository` を、Item を表示名と ID で読み出す形に変えた。
+それまでは、Item を探す UseCase がすべて Item を全件読み、UseCase の中で絞り込んでいた。データ層が決まるまでの仮の形だった。
+
+- UseCase は、表示名（`NotBlankString`）か ID を Repository に渡し、その Item だけを読む。完全一致は `findByDisplayName`・`findByDisplayNames`、検索の部分一致は `search`、ID は `findById`・`findByIds` で読む
+- 全件を読む口は外した。全件が要るもの（重複候補の判定の具象など）ができたら、その用途の口を足す
+- 一致したときに既存の Item を使うか、`AlreadyExists` を返すかは、今までどおり UseCase が決める。Repository は読んだ Item を返すだけで、判断を持たない。一致したときの扱いは操作ごとに違う（作成と rename は返す、Recipe の保存は使う、Session への追加は使い、無ければ Session 限定の品目にする）ためである
+- 何を同じ名前とみなすか（前後の空白を除いて完全に一致）は、`NotBlankString` が持つ。Repository は、受け取った表示名と等しい Item を返すだけである。正規化（全角と半角など）を足すときは、比べる値を作る側として domain に足し、保存する列もあわせて見直す
+- 部分一致の規則（英字の大文字・小文字を区別するかなど）は、Repository の具象が持つ。全件を読んで絞り込んでいたときと同じく、大文字・小文字を区別する
+- 検索語の前後の空白の除去と空入力の扱いは UseCase に残し、検索語も `NotBlankString` で渡す
+- Session への Recipe の追加は、選ばれた Item を ID で、打たれた名前の Item を表示名で、別々に読む。2つが同じ時点のものである必要はない。材料は1行ずつ独立に Item に結び付け、2つの読み出しの結果を突き合わせて決める規則がないためである。間に rename が入ると、同じ Item へのつながりで表示名の違う品目が2つできうるが、rename を挟んで2回追加したときと同じく、規則の範囲に収まる（「集約と不変条件」）。同じ時点で読む必要が出たら、ID と表示名を一度に渡して読むメソッドを Repository に足し、具象の中で1回の読み出しにする。`TransactionRunner` で包む形にしないのは、`TransactionRunner` が複数の集約への書き込みをまとめるためのもので（「UseCase の方針」）、読み出しだけの UseCase に持ち込む理由がないためである
+
 ## AI / ML
 
 PoC は完了済み。
@@ -416,7 +427,7 @@ PoC は完了済み。
 - Recipe の写真に関する未決定事項（詳細は [photo.md](photo.md) 参照）
 - Recipe 削除機能の実装時、編集画面からの保存によって削除済み Recipe を再作成しないようにするか。現時点では決めていない。今の実装は新規作成と同一の `save` メソッドで上書き保存する構成となっている。あわせて、Session から元の Recipe へ遷移しようとしたときに Recipe が削除されていた場合の見せ方も決める
 - 変更がない状態での保存要求時にも永続化処理を行うかどうか。現時点では無条件で保存する実装となっており、将来のサーバー同期導入時に方針を決定する
-- Item の表示名の一致判定（検索の部分一致、作成時と rename 時の重複検知の完全一致）をどこで行うか。現時点では、いずれも Repository から全件を読み込み、UseCase で絞り込んでいる。Recipe の作成・編集と Session への Recipe の追加の UseCase も、材料の新しい表示名を既存の Item と照らすために、Item を全件読み込んでいる。表示名の一致の規則（何を同じ名前とみなすか）を domain に置くかも、あわせて決める。データ層の実装時に、表示名を Repository へ渡す形へ移すかを、検索・作成・rename で揃えて決める。Web 版では全件の通信が重くなること、SQLite の `LIKE` は英字の大文字・小文字を区別せず `%` や `_` のエスケープも必要なことを踏まえる。移した場合も、前後の空白の除去と空入力の扱いは今の場所（表示名は `NotBlankString`、検索語は UseCase）に残す。あわせて、同じ表示名の Item の作成や rename が同時に行われた場合の重複を、データ層でどう防ぐかも決める（Room の `@Transaction` で足りるか、一意制約が要るかなど）
+- 同じ表示名の Item の作成や rename が同時に行われた場合の重複を、データ層でどう防ぐか（Room の `@Transaction` で足りるか、一意制約が要るかなど）
 - Recipe の保存時や Session への Recipe の追加時に既存の Item を使ったことを、材料の行単位で返す必要があるか。現時点では、使った既存の Item の一覧だけを返している。UI の実装時に確認する
   - Recipe の編集で、Item を選んであった材料の名前を打ち直して既存の Item と一致した場合も、今の規則どおり確認なしでその Item を使う。変わるのは編集中の Recipe のその材料だけで、元の Item もほかの Recipe も変わらないため。確認を挟みたくなっても、保存の前に UI が確かめるか、保存の後に結果で知らせるかの違いで、`EditRecipeUseCase` は変わらない
 - 保存先から集約を読み戻す方法。ShoppingSession のコンストラクタは private なので、データ層の実装時に、中身を受け取って「集約と不変条件」の規則を確かめ、満たせば集約を作り、満たさなければ null を返す生成関数を domain に足す。内訳の ID は購入済みチェックの鍵なので、読み戻しても変わらないようにする
