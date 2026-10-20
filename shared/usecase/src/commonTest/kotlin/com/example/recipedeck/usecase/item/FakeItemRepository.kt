@@ -36,7 +36,17 @@ class FakeItemRepository : ItemRepository {
         find { items -> items.filter { it.displayName in displayNames }.toImmutableList() }
 
     override suspend fun search(keyword: NotBlankString): Outcome<ImmutableList<Item>, ItemRepositoryFailure> =
-        find { items -> items.filter { it.displayName.value.contains(keyword.value) }.toImmutableList() }
+        find { items ->
+            items
+                .filter { it.displayName.value.contains(keyword.value) }
+                .sortedWith(
+                    compareBy(
+                        { if (it.displayName == keyword) 0 else if (it.displayName.value.startsWith(keyword.value)) 1 else 2 },
+                        { it.displayName.value.length },
+                    ),
+                )
+                .toImmutableList()
+        }
 
     private fun <T> find(select: (List<Item>) -> T): Outcome<T, ItemRepositoryFailure> {
         findFailure?.let { return Outcome.Failure(it) }
