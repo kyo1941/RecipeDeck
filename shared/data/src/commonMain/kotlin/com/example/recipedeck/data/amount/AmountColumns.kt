@@ -2,6 +2,7 @@ package com.example.recipedeck.data.amount
 
 import androidx.room3.ColumnInfo
 import com.example.recipedeck.data.InvalidStoredRecordException
+import com.example.recipedeck.data.storedEnumOf
 import com.example.recipedeck.domain.amount.Amount
 import com.example.recipedeck.domain.amount.AmountUnit
 import com.example.recipedeck.domain.amount.Quantity
@@ -24,8 +25,8 @@ internal fun AmountColumns.toAmountOrNull(): Amount? {
     return Amount(
         quantity = Quantity.of(quantityNumerator, quantityDenominator)
             ?: throw InvalidStoredRecordException("数量が正の数になっていない: $this"),
-        notation = quantityNotationOf(quantityNotation),
-        unit = unit?.let(::amountUnitOf),
+        notation = storedEnumOf(quantityNotation, QuantityNotation.entries, QuantityNotation::storedValue) { "分量の入力形式" },
+        unit = unit?.let { storedEnumOf(it, AmountUnit.entries, AmountUnit::storedValue) { "分量の単位" } },
     )
 }
 
@@ -50,11 +51,3 @@ private val AmountUnit.storedValue: String
         AmountUnit.MILLILITER -> "milliliter"
         AmountUnit.LITER -> "liter"
     }
-
-private fun quantityNotationOf(value: String): QuantityNotation =
-    QuantityNotation.entries.firstOrNull { it.storedValue == value }
-        ?: throw InvalidStoredRecordException("知らない入力形式: $value")
-
-private fun amountUnitOf(value: String): AmountUnit =
-    AmountUnit.entries.firstOrNull { it.storedValue == value }
-        ?: throw InvalidStoredRecordException("知らない単位: $value")

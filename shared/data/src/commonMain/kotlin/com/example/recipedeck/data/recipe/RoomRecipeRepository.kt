@@ -2,9 +2,9 @@ package com.example.recipedeck.data.recipe
 
 import androidx.room3.withReadTransaction
 import androidx.room3.withWriteTransaction
-import com.example.recipedeck.data.InvalidStoredRecordException
 import com.example.recipedeck.data.RecipeDeckDatabase
 import com.example.recipedeck.data.outcomeOf
+import com.example.recipedeck.data.storedEnumOf
 import com.example.recipedeck.data.storedNotBlankStringOf
 import com.example.recipedeck.data.amount.toAmountColumns
 import com.example.recipedeck.data.amount.toAmountOrNull
@@ -62,8 +62,7 @@ private val RecipeStatus.storedValue: String
 private fun RecipeEntity.toRecipe(ingredients: List<RecipeIngredientEntity>): Recipe = Recipe(
     id = RecipeId(id),
     name = storedNotBlankStringOf(name) { "Recipe $id の名前" },
-    status = RecipeStatus.entries.firstOrNull { it.storedValue == status }
-        ?: throw InvalidStoredRecordException("Recipe $id の状態が知らない値になっている: $status"),
+    status = storedEnumOf(status, RecipeStatus.entries, RecipeStatus::storedValue) { "Recipe $id の状態" },
     photoRef = photoRef,
     memo = memo?.let { storedNotBlankStringOf(it) { "Recipe $id のメモ" } },
     ingredients = ingredients.map { it.toRecipeIngredient() }.toImmutableList(),
