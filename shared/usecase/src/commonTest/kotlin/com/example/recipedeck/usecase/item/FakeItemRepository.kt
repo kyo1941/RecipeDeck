@@ -42,7 +42,7 @@ class FakeItemRepository : ItemRepository {
                 .sortedWith(
                     compareBy(
                         { if (it.displayName == keyword) 0 else if (it.displayName.value.startsWith(keyword.value)) 1 else 2 },
-                        { it.displayName.value.length },
+                        { it.displayName.value.characterCount() },
                     ),
                 )
                 .toImmutableList()
@@ -53,3 +53,5 @@ class FakeItemRepository : ItemRepository {
         return Outcome.Success(select(savedItems))
     }
 }
+
+private fun String.characterCount(): Int = count { !it.isLowSurrogate() }

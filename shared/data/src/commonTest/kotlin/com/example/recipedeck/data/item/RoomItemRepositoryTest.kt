@@ -140,6 +140,17 @@ class RoomItemRepositoryTest {
     }
 
     @Test
+    fun 検索の表示名の長さは文字数で比べる() = runTestWithRecipeDeckDatabase { database ->
+        val repository = RoomItemRepository(database)
+        repository.save(item("item-1", "ミニトマト缶"))
+        repository.save(item("item-2", "🍅🍅トマト"))
+
+        val result = repository.search(notBlankStringOrFail("マト"))
+
+        assertEquals(Outcome.Success(persistentListOf(item("item-2", "🍅🍅トマト"), item("item-1", "ミニトマト缶"))), result)
+    }
+
+    @Test
     fun 検索は英字の大文字と小文字を区別する() = runTestWithRecipeDeckDatabase { database ->
         val repository = RoomItemRepository(database)
         repository.save(item("item-1", "Tabasco"))
