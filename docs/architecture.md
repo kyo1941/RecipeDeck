@@ -151,7 +151,7 @@ erDiagram
 ### 集約と不変条件
 
 - Recipe は集約ルート。材料の一覧を保持し、並び順はリストの順序に従う
-- Recipe の材料の行（RecipeIngredient）は ID を持たない。行を1つだけ指す操作が今は無く、行は一覧の中の位置で区別できるため。行を指す操作を作るときは、行 ID を持たせ直す。保存のときに行をどう識別するかはデータ層で決める
+- Recipe の材料の行（RecipeIngredient）は ID を持たない。行を1つだけ指す操作が今は無く、行は一覧の中の位置で区別できるため。行を指す操作を作るときは、行 ID を持たせ直す。保存のときは、データ層が（Recipe の ID, 位置）で行を識別する（「永続化との対応」）
 - Session 内の材料（SessionRecipeIngredient）と手動追加（ManualAddition）は、内訳の ID（`ShoppingListItemSourceId`）を持つ。購入済みチェックを内訳ごとに記録するときの鍵にするため
   - Session 内の Recipe と品目の組を鍵にしないのは、1つの Recipe に同じ品目の行が複数あるとき（[spec.md](spec.md#recipe)）に、それらの行が1つのチェックを共有してしまうため
   - 手動追加にも ID を持たせるのは、手動追加を消して足し直したときに、前のチェックが生き返らないようにするため
@@ -178,7 +178,9 @@ erDiagram
 
 永続化層において、材料は Recipe と Item の中間テーブルとして表現される。
 所属する Recipe の ID と並び順の列は、ドメイン層の型には持たせずデータ層で付与する。
-1つの Recipe に同一 Item の行が複数存在しうるため、中間テーブルの主キーは (Recipe ID, Item ID) にはできない。行ごとの固有 ID にするか、(Recipe ID, 並び順) にするかは、データ層の実装時に決める（未確定事項）。
+1つの Recipe に同一 Item の行が複数存在しうるため、中間テーブルの主キーは (Recipe ID, Item ID) にはできない。主キーは (Recipe ID, 並び順) にし、行ごとの固有 ID は作らない。
+並び順の列は、主キーにしなくても要る。材料の一覧の順序には意味があり、SQL の表の行には順序がないためである。並び順の列があれば、(Recipe ID, 並び順) で行は1つに決まる。
+行ごとの固有 ID を作らないのは、domain の行が ID を持たないので、データ層が保存のたびに ID を作り直すことになり、その ID が保存をまたいで同じ行を指さないためである。行を指す操作ができて domain の行に ID を持たせたら、主キーを行の ID に移す。
 
 ## UseCase の方針
 
@@ -215,19 +217,27 @@ erDiagram
 - Repository 起因の失敗は、Repository ごとに定義した sealed interface（例: `RecipeRepositoryFailure`）で表現する。これは技術的要因に基づく分類であり、UI 層の関心事とは完全に分離されている。受け取る側の扱いは「UseCase の方針」に従う。今は Repository ごとに1つの型とし、メソッドによって発生しうる失敗の種類がずれてきたら、メソッドごとに型を分ける
 - データ層の実装では、利用する外部ライブラリから送出される例外を捕捉し、このドメイン失敗型にマッピングして返却する。これにより、UseCase 層が特定のライブラリに依存することを防ぐ
 - データ層の実装では、コルーチンの `CancellationException` を失敗型でラップせず、そのまま再送出（throw）する。失敗型にラップしてしまうと、全 UseCase 側でキャンセルの有無を個別に識別しなければならなくなるためである
+- この2つ（外部のライブラリの例外を失敗型にする、`CancellationException` を投げ直す）は、`:shared:data` の中の `outcomeOf` の1か所にまとめ、Repository と `TransactionRunner` の具象はそれを通す。domain に置かないのは、例外を捕まえて失敗型にするのがデータ層の仕事で、domain に依存する UseCase から使えないようにするためである
 - 購入の記録は、Session と同じデータベースの別テーブルに置く。購入の記録は Session と寿命を共にし（集約は別で、Session の ID で結び付く）、削除やトランザクションを Session と一緒に扱えるため。Session も購入の記録も Room に置く（「技術構成」）。DataStore は採らない。保存先が2つに分かれて Session と同じトランザクションに入れられず、チェック程度の書き込み頻度では読み書きの軽さも利点にならないため。Session を Room 以外に置くことになったら、この評価をやり直す
 - `TransactionRunner` の具象（`:shared:data` の `RoomTransactionRunner`）は、Room の `withWriteTransaction`（`useWriterConnection { it.withTransaction(IMMEDIATE) { … } }`）で包み、`TransactionScope.rollback` を Room の `TransactionScope.rollback` へ渡す。その中で Repository の実装が呼ぶ DAO は、同じトランザクションに入る。Room 3 は、接続をコルーチンのコンテキストに載せて使い回すためである（`ConnectionPoolImpl.useConnection`）。公式ドキュメントには明記がないので、Android と iOS の両方でテスト（`RoomTransactionRunnerTest`）で確かめている。Android でもこの経路を通るのは、同梱の SQLite のドライバ（`BundledSQLiteDriver`）を使うためである。OS の SQLite のドライバ（`AndroidSQLiteDriver`）では、トランザクションをスレッドに縛る別の経路になる。ドライバを変えるときは、このテストを Android の端末で流し直す
   - Room が投げる例外は `TransactionRunnerFailure` にして返し、`CancellationException` は再送出する。狙いは、データベースを開く・トランザクションを始める・確定するときの例外である
   - ブロックの中で投げられた例外（Repository の実装の捕まえ忘れや、UseCase のコードの不具合）も、取り消したうえで失敗として返す。ブロックの例外と Room の例外を外から見分けるには、例外を包んで外す処理が要り、具象が読みにくくなるためである。どちらでも書き込みは取り消され、違いはユーザーに見えるのが「落ちる」か「保存できなかったと出る」かなので、落とさない方を選ぶ。不具合は、捕まえた例外をログに残して見つける（ログの仕組みは未確定事項）
   - テストでは、テストのソースセットにだけ置くテスト用のテーブルとデータベースを使う。確かめるのはトランザクションの約束で、製品のテーブルの形とは関係がないため、製品のテーブルができても置き換えない。データベースは、メモリ上ではなくファイルに置く。Room はメモリ上のデータベースを接続1本で開き、ファイルのデータベースは読み出し用と書き込み用の複数の接続で開く（room3-runtime 3.0.3 の `RoomDatabase.Builder.build`）。製品と同じ複数の接続の形で、トランザクションの中の DAO が同じ接続を使うことを確かめるためである
-- Android と iOS の Room の表は、`:shared:data` の `RecipeDeckDatabase` に置く。Item は `item` 表で、ID を主キーにし、表示名に一意制約を張る（「集約と不変条件」）
+- Android と iOS の Room の表は、`:shared:data` の `RecipeDeckDatabase` に置く。表は domain の型と1対1にし、domain にない列は、材料の行が属する Recipe の ID と並び順だけにする
+  - Item は `item` 表で、ID を主キーにし、表示名に一意制約を張る（「集約と不変条件」）
+  - Recipe は `recipe` 表、材料は `recipe_ingredient` 表に置く。材料の行の主キーは（Recipe の ID, 並び順）（「永続化との対応」）
+  - 材料の行から Recipe への外部キーは `CASCADE` にする。材料の行は Recipe と寿命が同じためである
+  - 材料の行から Item への外部キーは `RESTRICT` にし、`item_id` に索引を張る。Recipe が使っている Item だけが消えることを、データベースが拒む形で守る（[spec.md](spec.md#item)）。Item の削除は今はないので、削除を作るときに、使われている Item の扱いとあわせて見直す。存在しない Item を指す Recipe の保存も、データベースが拒んで `Unexpected` になる
+  - 分量（`Amount?`）は、数量の分子・分母・入力形式・単位の4つの列に開く（`AmountColumns`）。分量なしは4つとも空。Session の表でも同じ列の形を使う
+  - Recipe の状態・分量の入力形式・単位は、Kotlin の enum の名前ではなく、data で決めた固定の文字列（`draft`・`fraction`・`gram` など）で持つ。Room の既定（enum の名前をそのまま書く）では、enum の名前を変えただけで保存済みの値が読めなくなるためである。書く側の変換は `when` で書き、enum に値が増えたらコンパイルで分かるようにする
+- Recipe の保存は、Recipe の行を上書きし、その Recipe の材料の行をすべて消して並び順を振り直して入れる。3つの書き込みは Repository の中で1つのトランザクション（`withWriteTransaction`）にまとめる。読み出しも、Recipe の行と材料の行を1つの読み出しのトランザクション（`withReadTransaction`）で読み、違う時点の行が混ざらないようにする。`TransactionRunner` の中から呼ばれたときは、Room が外側の接続を使い回し、中のトランザクションを `SAVEPOINT` にするので、外側で取り消せば一緒に取り消される（room3-runtime 3.0.3 の `ConnectionPoolImpl`。`RoomRecipeRepositoryTransactionTest` で確かめている）
 - 上書きする保存（同じ ID が無ければ入れ、あれば上書きする）は、DAO の SQL に `INSERT … ON CONFLICT(id) DO UPDATE` と書き、ID がぶつかったときだけ上書きする。表示名などほかの一意制約にぶつかれば、例外になって `Unexpected` になる。Room の `@Upsert` と `@Insert(onConflict = REPLACE)` は使わない。ほかの表も同じ書き方にする
   - `@Upsert` は、挿入がどの一意制約で失敗しても、主キーでの更新に切り替える（room3-runtime 3.0.3 の `EntityUpsertAdapter`）。新しい Item の表示名がぶつかると、0行の更新で黙って成功し、保存されていない Item の ID を UseCase が返してしまう
   - `REPLACE` は、ぶつかった相手の行を消してから入れる。表示名がぶつかると、同じ名前の別の Item が消える
   - 入れるか上書きするかの判断を、Repository の Kotlin ではなく SQL に持たせるのは、Room の都合で起きる問題を Room の層の中で閉じるためである
 - 検索の部分一致は、SQL の `instr(display_name, ?) > 0` で書く。`LIKE` は英字の大文字・小文字を区別せず、`%` と `_` を記号として扱うので使わない。並びは spec の規則（完全一致、前方一致、それ以外の部分一致の順。同じ順の中では表示名の短いものを先にする）に従い、表示名の長さも同じなら作った順（`rowid`）にする。前方一致も `instr` で見る
 - 保存先から読み戻した値が規則を満たさないとき（`NotBlankString.of` が null を返すなど）は、data の `InvalidStoredRecordException` を投げ、Repository の失敗（`Unexpected`）にする。呼び出し側が個別に対処できることがないためである。一覧を読むときは、1件でも不正なら一覧全体を失敗にする
-- Repository の具象のテストは、製品の `RecipeDeckDatabase` をメモリ上に作って流す。確かめるのは SQL と SQLite の振る舞い（一意制約、`ON CONFLICT`、`instr`、並び）なので、Fake ではなく本物の Room と SQLite を使う。メモリ上に作るのは、テストごとにファイルを消して作り直さずに済むためである
+- Repository の具象のテストは、製品の `RecipeDeckDatabase` をメモリ上に作って流す。確かめるのは SQL と SQLite の振る舞い（一意制約、`ON CONFLICT`、`instr`、並び）なので、Fake ではなく本物の Room と SQLite を使う。メモリ上に作るのは、テストごとにファイルを消して作り直さずに済むためである。`TransactionRunner` の中から Repository を呼ぶテスト（`RoomRecipeRepositoryTransactionTest`）だけは、`TransactionRunner` のテストと同じ理由で、ファイルに置く
 
 ## 実装の進め方
 
@@ -394,7 +404,7 @@ Kotlin を 2.4.21 に上げ、Kotlin 2.2 のために置いていた制約（kot
 - 検索語の前後の空白の除去と空入力の扱いは UseCase に残し、検索語も `NotBlankString` で渡す
 - Session への Recipe の追加は、選ばれた Item を ID で、打たれた名前の Item を表示名で、別々に読む。2つが同じ時点のものである必要はない。材料は1行ずつ独立に Item に結び付け、2つの読み出しの結果を突き合わせて決める規則がないためである。間に rename が入ると、同じ Item へのつながりで表示名の違う品目が2つできうるが、rename を挟んで2回追加したときと同じく、規則の範囲に収まる（「集約と不変条件」）。同じ時点で読む必要が出たら、ID と表示名を一度に渡して読むメソッドを Repository に足し、具象の中で1回の読み出しにする。`TransactionRunner` で包む形にしないのは、`TransactionRunner` が複数の集約への書き込みをまとめるためのもので（「UseCase の方針」）、読み出しだけの UseCase に持ち込む理由がないためである
 
-Item の Repository の具象（`RoomItemRepository`）を作り、Android と iOS の両方でテスト（`RoomItemRepositoryTest`）で確かめた。表と保存の書き方は「データ層の方針」に書いた。
+Item と Recipe の Repository の具象（`RoomItemRepository`・`RoomRecipeRepository`）を作り、Android と iOS の両方でテストで確かめた。表と保存の書き方は「データ層の方針」に書いた。
 
 ## AI / ML
 
@@ -431,7 +441,7 @@ PoC は完了済み。
 
 - Repository の分け方
 - Web 版など、Android と iOS 以外の Repository の実装。Android と iOS のローカルの保存は Room 3（「技術構成」）
-- Room のテーブル・主キー・インデックス。Recipe の材料の行の主キー（行ごとの固有 ID か、所属と並び順か）もあわせて決める。domain の Recipe の材料の行は ID を持たない（「集約と不変条件」参照）
+- ShoppingSession と購入の記録の Room のテーブル・主キー・インデックス（「実装の進め方」の 16-3）。Item と Recipe の表は「データ層の方針」に書いた
 - 購入の記録の保存の具象（「データ層の方針」）で、データ層の実装時に確かめること
   - 購入の記録だけが読めない失敗が起きうるか。起きうるなら、買い物リストを出すときに全体を `Unexpected` にする扱い（「実装の進め方」の 12）を見直す
   - 購入の記録の読み込みに、Repository の中でメモリのキャッシュを持たせるか。持たせる場合も、書き込みは保存し終えてから完了とする（裏で書くと、タスクキルで消える）

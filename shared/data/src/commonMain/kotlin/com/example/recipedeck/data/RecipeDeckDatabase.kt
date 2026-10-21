@@ -6,11 +6,15 @@ import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
 import com.example.recipedeck.data.item.ItemDao
 import com.example.recipedeck.data.item.ItemEntity
+import com.example.recipedeck.data.recipe.RecipeDao
+import com.example.recipedeck.data.recipe.RecipeEntity
+import com.example.recipedeck.data.recipe.RecipeIngredientEntity
 
-@Database(entities = [ItemEntity::class], version = 1, exportSchema = false)
+@Database(entities = [ItemEntity::class, RecipeEntity::class, RecipeIngredientEntity::class], version = 1, exportSchema = false)
 @ConstructedBy(RecipeDeckDatabaseConstructor::class)
 abstract class RecipeDeckDatabase : RoomDatabase() {
     internal abstract fun itemDao(): ItemDao
+    internal abstract fun recipeDao(): RecipeDao
 }
 
 @Suppress("KotlinNoActualForExpect")

@@ -7,8 +7,19 @@ import kotlinx.coroutines.test.runTest
 
 expect fun recipeDeckTestDatabaseBuilder(): RoomDatabase.Builder<RecipeDeckDatabase>
 
-fun runTestWithRecipeDeckDatabase(block: suspend TestScope.(RecipeDeckDatabase) -> Unit) = runTest {
-    val database = recipeDeckTestDatabaseBuilder()
+expect fun recipeDeckFileTestDatabaseBuilder(): RoomDatabase.Builder<RecipeDeckDatabase>
+
+fun runTestWithRecipeDeckDatabase(block: suspend TestScope.(RecipeDeckDatabase) -> Unit) =
+    runTestWith(recipeDeckTestDatabaseBuilder(), block)
+
+fun runTestWithRecipeDeckFileDatabase(block: suspend TestScope.(RecipeDeckDatabase) -> Unit) =
+    runTestWith(recipeDeckFileTestDatabaseBuilder(), block)
+
+private fun runTestWith(
+    builder: RoomDatabase.Builder<RecipeDeckDatabase>,
+    block: suspend TestScope.(RecipeDeckDatabase) -> Unit,
+) = runTest {
+    val database = builder
         .setDriver(BundledSQLiteDriver())
         .build()
     try {
