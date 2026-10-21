@@ -1,8 +1,8 @@
 package com.example.recipedeck.data.item
 
-import com.example.recipedeck.data.InvalidStoredRecordException
 import com.example.recipedeck.data.RecipeDeckDatabase
 import com.example.recipedeck.data.outcomeOf
+import com.example.recipedeck.data.storedNotBlankStringOf
 import com.example.recipedeck.domain.NotBlankString
 import com.example.recipedeck.domain.Outcome
 import com.example.recipedeck.domain.item.Item
@@ -40,6 +40,5 @@ private fun List<ItemEntity>.toItems(): ImmutableList<Item> = map { it.toItem() 
 
 private fun ItemEntity.toItem(): Item = Item(
     id = ItemId(id),
-    displayName = NotBlankString.of(displayName)
-        ?: throw InvalidStoredRecordException("Item $id の表示名が空白だけになっている"),
+    displayName = storedNotBlankStringOf(displayName) { "Item $id の表示名" },
 )

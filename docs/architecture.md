@@ -237,7 +237,7 @@ erDiagram
   - `REPLACE` は、ぶつかった相手の行を消してから入れる。表示名がぶつかると、同じ名前の別の Item が消える
   - 入れるか上書きするかの判断を、Repository の Kotlin ではなく SQL に持たせるのは、Room の都合で起きる問題を Room の層の中で閉じるためである
 - 検索の部分一致は、SQL の `instr(display_name, ?) > 0` で書く。`LIKE` は英字の大文字・小文字を区別せず、`%` と `_` を記号として扱うので使わない。並びは spec の規則（完全一致、前方一致、それ以外の部分一致の順。同じ順の中では表示名の短いものを先にする）に従い、表示名の長さも同じなら作った順（`rowid`）にする。前方一致も `instr` で見る
-- 保存先から読み戻した値が規則を満たさないとき（`NotBlankString.of` が null を返すなど）は、data の `InvalidStoredRecordException` を投げ、Repository の失敗（`Unexpected`）にする。呼び出し側が個別に対処できることがないためである。一覧を読むときは、1件でも不正なら一覧全体を失敗にする
+- 保存先から読み戻した値が規則を満たさないとき（`NotBlankString.of` が null を返す、前後に空白が付いていて `NotBlankString.of` を通すと値が変わる、など）は、data の `InvalidStoredRecordException` を投げ、Repository の失敗（`Unexpected`）にする。呼び出し側が個別に対処できることがないためである。一覧を読むときは、1件でも不正なら一覧全体を失敗にする
 - Repository の具象のテストは、製品の `RecipeDeckDatabase` をメモリ上に作って流す。確かめるのは SQL と SQLite の振る舞い（一意制約、`ON CONFLICT`、`instr`、並び）なので、Fake ではなく本物の Room と SQLite を使う。メモリ上に作るのは、テストごとにファイルを消して作り直さずに済むためである。`TransactionRunner` の中から Repository を呼ぶテスト（`RoomRecipeRepositoryTransactionTest`）だけは、`TransactionRunner` のテストと同じ理由で、ファイルに置く
 
 ## 実装の進め方

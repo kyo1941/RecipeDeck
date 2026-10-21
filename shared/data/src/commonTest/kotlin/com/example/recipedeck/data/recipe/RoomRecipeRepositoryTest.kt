@@ -143,6 +143,17 @@ class RoomRecipeRepositoryTest {
     }
 
     @Test
+    fun 読み戻した名前やメモの前後に空白があれば失敗を返す() = runTestWithRecipeDeckDatabase { database ->
+        val dao = database.recipeDao()
+        dao.saveRecipe("recipe-1", "生姜焼き ", "ready", null, null)
+        dao.saveRecipe("recipe-2", "生姜焼き", "ready", null, " 強火で焼く")
+        val repository = RoomRecipeRepository(database)
+
+        assertIs<Outcome.Failure<RecipeRepositoryFailure.Unexpected>>(repository.findById(RecipeId("recipe-1")))
+        assertIs<Outcome.Failure<RecipeRepositoryFailure.Unexpected>>(repository.findById(RecipeId("recipe-2")))
+    }
+
+    @Test
     fun 読み戻した状態が知らない値なら失敗を返す() = runTestWithRecipeDeckDatabase { database ->
         database.recipeDao().saveRecipe("recipe-1", "生姜焼き", "archived", null, null)
 

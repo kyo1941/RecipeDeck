@@ -5,9 +5,9 @@ import androidx.room3.withWriteTransaction
 import com.example.recipedeck.data.InvalidStoredRecordException
 import com.example.recipedeck.data.RecipeDeckDatabase
 import com.example.recipedeck.data.outcomeOf
+import com.example.recipedeck.data.storedNotBlankStringOf
 import com.example.recipedeck.data.amount.toAmountColumns
 import com.example.recipedeck.data.amount.toAmountOrNull
-import com.example.recipedeck.domain.NotBlankString
 import com.example.recipedeck.domain.Outcome
 import com.example.recipedeck.domain.item.ItemId
 import com.example.recipedeck.domain.recipe.Recipe
@@ -61,11 +61,11 @@ private val RecipeStatus.storedValue: String
 
 private fun RecipeEntity.toRecipe(ingredients: List<RecipeIngredientEntity>): Recipe = Recipe(
     id = RecipeId(id),
-    name = NotBlankString.of(name) ?: throw InvalidStoredRecordException("Recipe $id の名前が空白だけになっている"),
+    name = storedNotBlankStringOf(name) { "Recipe $id の名前" },
     status = RecipeStatus.entries.firstOrNull { it.storedValue == status }
         ?: throw InvalidStoredRecordException("Recipe $id の状態が知らない値になっている: $status"),
     photoRef = photoRef,
-    memo = memo?.let { NotBlankString.of(it) ?: throw InvalidStoredRecordException("Recipe $id のメモが空白だけになっている") },
+    memo = memo?.let { storedNotBlankStringOf(it) { "Recipe $id のメモ" } },
     ingredients = ingredients.map { it.toRecipeIngredient() }.toImmutableList(),
 )
 

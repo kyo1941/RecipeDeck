@@ -151,6 +151,14 @@ class RoomItemRepositoryTest {
     }
 
     @Test
+    fun 読み戻した表示名の前後に空白があれば失敗を返す() = runTestWithRecipeDeckDatabase { database ->
+        database.itemDao().save("item-1", " 玉ねぎ")
+        val repository = RoomItemRepository(database)
+
+        assertIs<Outcome.Failure<ItemRepositoryFailure.Unexpected>>(repository.findById(ItemId("item-1")))
+    }
+
+    @Test
     fun 検索は英字の大文字と小文字を区別する() = runTestWithRecipeDeckDatabase { database ->
         val repository = RoomItemRepository(database)
         repository.save(item("item-1", "Tabasco"))
