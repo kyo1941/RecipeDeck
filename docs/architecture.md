@@ -29,12 +29,13 @@
 | `:androidApp` | Android アプリの入口。`MainActivity` だけを置き、`:shared:app` の画面を表示する |
 | `:shared:domain` | ドメイン層の KMP モジュール。ターゲットは JVM・iosArm64・iosSimulatorArm64。パッケージは `amount` / `item` / `recipe` / `shopping`。Repository の interface もここに置く |
 | `:shared:usecase` | UseCase の KMP モジュール。`:shared:domain` に依存し、ターゲットも同じ。パッケージは `ingredient` / `item` / `recipe` / `shopping`。`ingredient` には、Recipe と Session の両方で使う材料の入力を置く |
-| `:shared:data` | データ層の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:domain` に依存し、Repository と `TransactionRunner` の具象を置く |
+| `:shared:data` | データ層の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:domain` に依存し、Repository と `TransactionRunner` の具象、製品のデータベースの作り方を置く。Room は `api` で公開する（下の段落） |
 | `:shared:ui` | 画面の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:usecase` に依存する。今は仮の画面だけを置く |
 | `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui`・`:shared:usecase`・`:shared:data` に依存し、DI の組み立てを持つ。アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
 | `iosApp` | iOS アプリの入口。Gradle のモジュールではなく Xcode のプロジェクトで、`:shared:app` の framework を組み込み、その画面を表示する |
 
 DI の組み立てを `:shared:ui` ではなく `:shared:app` に置くのは、データ層の具象（`:shared:data`）を組み立てる側が知る必要があるためである。`:shared:ui` に置くと、画面や ViewModel のコードからもデータ層の具象が見えてしまう。分ければ、`:shared:ui` は `:shared:usecase` にしか依存しないので、UI からデータ層の具象を使うとビルドが落ちる。
+`:shared:data` は Room を `api` で公開する。`:shared:app` の DI の組み立てが、データベース（`RecipeDeckDatabase`。Room の `RoomDatabase` を継ぐ）とその作り方（`RoomDatabase.Builder`）を扱うためである。`:shared:ui` は `:shared:data` に依存しないので、画面のコードから Room は見えない。表の形（Entity）と DAO は `:shared:data` の `internal` にして、外に出さない。
 
 `:shared:domain` と `:shared:usecase` は Android の API を使わないので、Android のターゲットを持たない。Android のターゲットを持つモジュール（`:shared:ui` など）からは、JVM のターゲットの成果物を使う。
 `:shared:data` は、Android でデータベースの置き場所を決めるのに Android の API（`Context`）を使うので、Android のターゲットを持つ。JVM のターゲットは持たない。アプリが動くのは Android と iOS だけで、Room の JVM の経路は iOS と同じコードなので、テストは iOS シミュレータで流せば足りるためである。iOS シミュレータでのテストが遅くて困ったときに、JVM のターゲットを足す。
@@ -151,7 +152,7 @@ erDiagram
 ### 集約と不変条件
 
 - Recipe は集約ルート。材料の一覧を保持し、並び順はリストの順序に従う
-- Recipe の材料の行（RecipeIngredient）は ID を持たない。行を1つだけ指す操作が今は無く、行は一覧の中の位置で区別できるため。行を指す操作を作るときは、行 ID を持たせ直す。保存のときに行をどう識別するかはデータ層で決める
+- Recipe の材料の行（RecipeIngredient）は ID を持たない。行を1つだけ指す操作が今は無く、行は一覧の中の位置で区別できるため。行を指す操作を作るときは、行 ID を持たせ直す。保存のときは、データ層が（Recipe の ID, 位置）で行を識別する（「永続化との対応」）
 - Session 内の材料（SessionRecipeIngredient）と手動追加（ManualAddition）は、内訳の ID（`ShoppingListItemSourceId`）を持つ。購入済みチェックを内訳ごとに記録するときの鍵にするため
   - Session 内の Recipe と品目の組を鍵にしないのは、1つの Recipe に同じ品目の行が複数あるとき（[spec.md](spec.md#recipe)）に、それらの行が1つのチェックを共有してしまうため
   - 手動追加にも ID を持たせるのは、手動追加を消して足し直したときに、前のチェックが生き返らないようにするため
@@ -172,12 +173,15 @@ erDiagram
 - 完了日時は作成日時より過去であってはならない。完了の操作はまだ無い。端末の時計を戻すと正しい操作でも破れうるので、完了を拒むか時刻をそろえるかは、完了の操作を作るときに決める
 - ShoppingSession は `create`（空の進行中の Session）と `withAddedRecipe`（Recipe を追加した Session）でしか作れず、これらの操作が上の規則を満たすように組み立てる。手動追加と完了の操作はまだ無いので、手動追加のある Session と完了した Session は今は作られない
 - 「active な Session は最大1件」という不変条件は複数 Session にまたがる制約であるため、単一集約の境界内では担保できない。Repository より下の層（データ層）で保証する。UseCase は Session の ID を受け取らず、進行中の Session を探して使う
+- 同じ表示名の Item は2つ存在しない（[spec.md](spec.md#item) の作成・rename・Recipe の保存の規則を合わせた帰結）。Item ごとに別の集約なので、単一集約の境界内では担保できない。データ層（`item` の表示名の一意制約）で保証する。UseCase の確かめ（作成と rename の `AlreadyExists`、Recipe の保存などで既存の Item を使うこと）は読んでから書くので、連打などで同時に走るとすり抜けうる。すり抜けた書き込みは一意制約で失敗し、`Unexpected` になる。ユーザーが意図して起こせる失敗ではなく、見せられることもないので、理由ごとの結果は設けない。重複タップは UI のコンポーネントで防げるなら防ぐ
 
 ### 永続化との対応
 
 永続化層において、材料は Recipe と Item の中間テーブルとして表現される。
 所属する Recipe の ID と並び順の列は、ドメイン層の型には持たせずデータ層で付与する。
-1つの Recipe に同一 Item の行が複数存在しうるため、中間テーブルの主キーは (Recipe ID, Item ID) にはできない。行ごとの固有 ID にするか、(Recipe ID, 並び順) にするかは、データ層の実装時に決める（未確定事項）。
+1つの Recipe に同一 Item の行が複数存在しうるため、中間テーブルの主キーは (Recipe ID, Item ID) にはできない。主キーは (Recipe ID, 並び順) にし、行ごとの固有 ID は作らない。
+並び順の列は、主キーにしなくても要る。材料の一覧の順序には意味があり、SQL の表の行には順序がないためである。並び順の列があれば、(Recipe ID, 並び順) で行は1つに決まる。
+行ごとの固有 ID を作らないのは、domain の行が ID を持たないので、データ層が保存のたびに ID を作り直すことになり、その ID が保存をまたいで同じ行を指さないためである。行を指す操作ができて domain の行に ID を持たせたら、主キーを行の ID に移す。
 
 ## UseCase の方針
 
@@ -214,11 +218,27 @@ erDiagram
 - Repository 起因の失敗は、Repository ごとに定義した sealed interface（例: `RecipeRepositoryFailure`）で表現する。これは技術的要因に基づく分類であり、UI 層の関心事とは完全に分離されている。受け取る側の扱いは「UseCase の方針」に従う。今は Repository ごとに1つの型とし、メソッドによって発生しうる失敗の種類がずれてきたら、メソッドごとに型を分ける
 - データ層の実装では、利用する外部ライブラリから送出される例外を捕捉し、このドメイン失敗型にマッピングして返却する。これにより、UseCase 層が特定のライブラリに依存することを防ぐ
 - データ層の実装では、コルーチンの `CancellationException` を失敗型でラップせず、そのまま再送出（throw）する。失敗型にラップしてしまうと、全 UseCase 側でキャンセルの有無を個別に識別しなければならなくなるためである
+- この2つ（外部のライブラリの例外を失敗型にする、`CancellationException` を投げ直す）は、`:shared:data` の中の `outcomeOf` の1か所にまとめ、Repository と `TransactionRunner` の具象はそれを通す。domain に置かないのは、例外を捕まえて失敗型にするのがデータ層の仕事で、domain に依存する UseCase から使えないようにするためである
 - 購入の記録は、Session と同じデータベースの別テーブルに置く。購入の記録は Session と寿命を共にし（集約は別で、Session の ID で結び付く）、削除やトランザクションを Session と一緒に扱えるため。Session も購入の記録も Room に置く（「技術構成」）。DataStore は採らない。保存先が2つに分かれて Session と同じトランザクションに入れられず、チェック程度の書き込み頻度では読み書きの軽さも利点にならないため。Session を Room 以外に置くことになったら、この評価をやり直す
 - `TransactionRunner` の具象（`:shared:data` の `RoomTransactionRunner`）は、Room の `withWriteTransaction`（`useWriterConnection { it.withTransaction(IMMEDIATE) { … } }`）で包み、`TransactionScope.rollback` を Room の `TransactionScope.rollback` へ渡す。その中で Repository の実装が呼ぶ DAO は、同じトランザクションに入る。Room 3 は、接続をコルーチンのコンテキストに載せて使い回すためである（`ConnectionPoolImpl.useConnection`）。公式ドキュメントには明記がないので、Android と iOS の両方でテスト（`RoomTransactionRunnerTest`）で確かめている。Android でもこの経路を通るのは、同梱の SQLite のドライバ（`BundledSQLiteDriver`）を使うためである。OS の SQLite のドライバ（`AndroidSQLiteDriver`）では、トランザクションをスレッドに縛る別の経路になる。ドライバを変えるときは、このテストを Android の端末で流し直す
   - Room が投げる例外は `TransactionRunnerFailure` にして返し、`CancellationException` は再送出する。狙いは、データベースを開く・トランザクションを始める・確定するときの例外である
-  - ブロックの中で投げられた例外（Repository の実装の捕まえ忘れや、UseCase のコードの不具合）も、取り消したうえで失敗として返す。ブロックの例外と Room の例外を外から見分けるには、例外を包んで外す処理が要り、具象が読みにくくなるためである。どちらでも書き込みは取り消され、違いはユーザーに見えるのが「落ちる」か「保存できなかったと出る」かなので、落とさない方を選ぶ。不具合は、捕まえた例外をログに残して見つける（ログの仕組みは未確定事項）
-  - テストでは、テストのソースセットにだけ置くテスト用のテーブルとデータベースを使う。確かめるのはトランザクションの約束で、製品のテーブルの形とは関係がないため、製品のテーブルができても置き換えない
+  - ブロックの中で投げられた例外（Repository の実装の捕まえ忘れや、UseCase のコードの不具合）も、取り消したうえで失敗として返す。ブロックの例外と Room の例外を外から見分けるには、例外を包んで外す処理が要り、具象が読みにくくなるためである。どちらでも書き込みは取り消され、違いはユーザーに見えるのが「落ちる」か「保存できなかったと出る」かなので、落とさない方を選ぶ。不具合は、捕まえた例外をログに残して見つける（ログの仕組みは未確定事項。UI で決める）
+  - テストでは、テストのソースセットにだけ置くテスト用のテーブルとデータベースを使う。確かめるのはトランザクションの約束で、製品のテーブルの形とは関係がないため、製品のテーブルができても置き換えない。データベースは、メモリ上ではなくファイルに置く。Room はメモリ上のデータベースを接続1本で開き、ファイルのデータベースは読み出し用と書き込み用の複数の接続で開く（room3-runtime 3.0.3 の `RoomDatabase.Builder.build`）。製品と同じ複数の接続の形で、トランザクションの中の DAO が同じ接続を使うことを確かめるためである
+- Android と iOS の Room の表は、`:shared:data` の `RecipeDeckDatabase` に置く。表は domain の型と1対1にし、domain にない列は、材料の行が属する Recipe の ID と並び順だけにする
+  - Item は `item` 表で、ID を主キーにし、表示名に一意制約を張る（「集約と不変条件」）
+  - Recipe は `recipe` 表、材料は `recipe_ingredient` 表に置く。材料の行の主キーは（Recipe の ID, 並び順）（「永続化との対応」）
+  - 材料の行から Recipe への外部キーは `CASCADE` にする。材料の行は Recipe と寿命が同じためである
+  - 材料の行から Item への外部キーは `RESTRICT` にし、`item_id` に索引を張る。Recipe が使っている Item だけが消えることを、データベースが拒む形で守る（[spec.md](spec.md#item)）。Item の削除は今はないので、削除を作るときに、使われている Item の扱いとあわせて見直す。存在しない Item を指す Recipe の保存も、データベースが拒んで `Unexpected` になる
+  - 分量（`Amount?`）は、数量の分子・分母・入力形式・単位の4つの列に開く（`AmountColumns`）。分量なしは4つとも空。Session の表でも同じ列の形を使う
+  - Recipe の状態・分量の入力形式・単位は、Kotlin の enum の名前ではなく、data で決めた固定の文字列（`draft`・`fraction`・`gram` など）で持つ。Room の既定（enum の名前をそのまま書く）では、enum の名前を変えただけで保存済みの値が読めなくなるためである。書く側の変換は `when` で書き、enum に値が増えたらコンパイルで分かるようにする
+- Recipe の保存は、Recipe の行を上書きし、その Recipe の材料の行をすべて消して並び順を振り直して入れる。3つの書き込みは Repository の中で1つのトランザクション（`withWriteTransaction`）にまとめる。読み出しも、Recipe の行と材料の行を1つの読み出しのトランザクション（`withReadTransaction`）で読み、違う時点の行が混ざらないようにする。`TransactionRunner` の中から呼ばれたときは、Room が外側の接続を使い回し、中のトランザクションを `SAVEPOINT` にするので、外側で取り消せば一緒に取り消される（room3-runtime 3.0.3 の `ConnectionPoolImpl`。`RoomRecipeRepositoryTransactionTest` で確かめている）
+- 上書きする保存（同じ ID が無ければ入れ、あれば上書きする）は、DAO の SQL に `INSERT … ON CONFLICT(id) DO UPDATE` と書き、ID がぶつかったときだけ上書きする。表示名などほかの一意制約にぶつかれば、例外になって `Unexpected` になる。Room の `@Upsert` と `@Insert(onConflict = REPLACE)` は使わない。ほかの表も同じ書き方にする
+  - `@Upsert` は、挿入がどの一意制約で失敗しても、主キーでの更新に切り替える（room3-runtime 3.0.3 の `EntityUpsertAdapter`）。新しい Item の表示名がぶつかると、0行の更新で黙って成功し、保存されていない Item の ID を UseCase が返してしまう
+  - `REPLACE` は、ぶつかった相手の行を消してから入れる。表示名がぶつかると、同じ名前の別の Item が消える
+  - 入れるか上書きするかの判断を、Repository の Kotlin ではなく SQL に持たせるのは、Room の都合で起きる問題を Room の層の中で閉じるためである
+- 検索の部分一致は、SQL の `instr(display_name, ?) > 0` で書く。`LIKE` は英字の大文字・小文字を区別せず、`%` と `_` を記号として扱うので使わない。並びは spec の規則（完全一致、前方一致、それ以外の部分一致の順。同じ順の中では表示名の短いものを先にする）に従い、表示名の長さも同じなら作った順（`rowid`）にする。前方一致も `instr` で見る
+- 保存先から読み戻した値が規則を満たさないとき（`NotBlankString.of` が null を返す、前後に空白が付いていて `NotBlankString.of` を通すと値が変わる、など）は、data の `InvalidStoredRecordException` を投げ、Repository の失敗（`Unexpected`）にする。呼び出し側が個別に対処できることがないためである。一覧を読むときは、1件でも不正なら一覧全体を失敗にする
+- Repository の具象のテストは、製品の `RecipeDeckDatabase` をメモリ上に作って流す。確かめるのは SQL と SQLite の振る舞い（一意制約、`ON CONFLICT`、`instr`、並び）なので、Fake ではなく本物の Room と SQLite を使う。メモリ上に作るのは、テストごとにファイルを消して作り直さずに済むためである。`TransactionRunner` の中から Repository を呼ぶテスト（`RoomRecipeRepositoryTransactionTest`）だけは、`TransactionRunner` のテストと同じ理由で、ファイルに置く
 
 ## 実装の進め方
 
@@ -325,7 +345,7 @@ spec の「既知の安全な候補」（別名で解決できた候補）と「
   - Item へのつながりのない Session 限定の品目は、この条件では1つに決まらないので、結局は品目を選ぶ入力が要る
 
 14 は、Item の表示名を変える UseCase（`RenameItemUseCase`）を実装した。merge は作っていない（[spec.md](spec.md#未確定事項)）。
-Item 作成 UseCase と同じく Item を全件読み、変える Item と、表示名が完全一致する別の Item を探す。別の Item と一致したら保存せずに `AlreadyExists` でその Item を返し、変える Item がなければ `ItemNoLongerExists` を返す（今は Item の削除がないので起きない）。
+変える Item を ID で、新しい表示名の Item を表示名で読み、表示名が完全一致する別の Item があるかを確かめる。別の Item と一致したら保存せずに `AlreadyExists` でその Item を返し、変える Item がなければ `ItemNoLongerExists` を返す（今は Item の削除がないので起きない）。
 `ItemRepository.save` は、Recipe の保存と同じく、同じ ID の Item があれば上書きする。rename はこれを使う。
 Session には rename を反映しない（[spec.md](spec.md#shoppingsession)）ので、UseCase は Session を読まない。
 rename の画面で重複候補を求めるときは、`FindDuplicateCandidatesUseCase` に名前を変える Item の ID（`renamingItemId`）を渡し、`DuplicateCandidateFinder.findItems` はその Item を候補から除く（`excludedItemId`）。新しい名前に最も似ているのは名前を変える Item 自身なので、除かないと候補の先頭に自分が出る。
@@ -362,8 +382,13 @@ UI を作るときに足す UseCase（今は無い）：
 - 編集する Recipe を読む
 - Session を完了する。完了できないと進行中の Session が残り続け、次の買い物を始められない。完了日時の規則（「集約と不変条件」）の扱いも、そのときに決める
 
+UI を作るときに守ること（16-2 で出たもの）：
+
+- 保存の UseCase が `Unexpected` を返したら、入力を消さずに残し、保存をやり直せるようにする。データベースを開けない・書けないといった失敗は、アプリを落とさず `Unexpected` で返り、書きかけた分はトランザクションで取り消される（「データ層の方針」）。やり直しても、Item や Recipe が中途半端に残ることはない
+- 保存の重複タップを、UI のコンポーネントで防げるなら防ぐ。防げずに同じ表示名の Item が同時に作られても、一意制約で失敗して `Unexpected` になる（「集約と不変条件」）
+
 15 では、CMP の構成に移し、両方のアプリが共通の仮の画面を表示するところまでを作った。モジュールの分け方と依存の向きは「モジュール構成」、DI は「技術構成」、重複候補の判定の機能フラグは「AI / ML」に書いた。
-DI のグラフが組み立てるのは、候補を出さない Finder と `FindDuplicateCandidatesUseCase` だけである。ほかの UseCase は Repository の具象が要るので、16・17 で足す。グラフを実行時に作るのは、画面に UseCase を渡す 17 からで、それまでは Metro のコンパイル時の検証だけで組み立てを確かめる。
+DI のグラフが組み立てるのは、候補を出さない Finder と `FindDuplicateCandidatesUseCase` だけだった（16-2 で Item と Recipe の UseCase を足した）。グラフを実行時に作るのは、画面に UseCase を渡す 17 からで、それまでは Metro のコンパイル時の検証だけで組み立てを確かめる。
 Kotlin を 2.4.21 に上げ、Kotlin 2.2 のために置いていた制約（kotlinx-collections-immutable を 0.4.0 に留める、`Instant`・`Uuid` の `OptIn`）を外した。
 
 16 は、1回に考える論点を絞るため、次のように分けて進める。Repository の具象を DI のグラフに足すのは、それぞれの中で行う。
@@ -373,6 +398,26 @@ Kotlin を 2.4.21 に上げ、Kotlin 2.2 のために置いていた制約（kot
 - 16-3：ShoppingSession と購入の記録の Repository
 
 16-1 では、`TransactionRunner` の具象を作り、DAO が同じトランザクションに入ることを Android と iOS のテストで確かめた。製品のテーブルはまだ無い。あわせて、`TransactionRunner` 自体の失敗を `Outcome` で返すようにした（「UseCase の方針」）。
+
+16-2 では、`ItemRepository` を、Item を表示名と ID で読み出す形に変えた。
+それまでは、Item を探す UseCase がすべて Item を全件読み、UseCase の中で絞り込んでいた。データ層が決まるまでの仮の形だった。
+
+- UseCase は、表示名（`NotBlankString`）か ID を Repository に渡し、その Item だけを読む。完全一致は `findByDisplayName`・`findByDisplayNames`、検索の部分一致は `search`、ID は `findById`・`findByIds` で読む
+- 全件を読む口は外した。全件が要るもの（重複候補の判定の具象など）ができたら、その用途の口を足す
+- 一致したときに既存の Item を使うか、`AlreadyExists` を返すかは、今までどおり UseCase が決める。Repository は読んだ Item を返すだけで、判断を持たない。一致したときの扱いは操作ごとに違う（作成と rename は返す、Recipe の保存は使う、Session への追加は使い、無ければ Session 限定の品目にする）ためである
+- 何を同じ名前とみなすか（前後の空白を除いて完全に一致）は、`NotBlankString` が持つ。Repository は、受け取った表示名と等しい Item を返すだけである。正規化（全角と半角など）を足すときは、比べる値を作る側として domain に足し、保存する列もあわせて見直す
+- 部分一致の規則（英字の大文字・小文字を区別するかなど）は、Repository の具象が持つ。全件を読んで絞り込んでいたときと同じく、大文字・小文字を区別する
+- 検索語の前後の空白の除去と空入力の扱いは UseCase に残し、検索語も `NotBlankString` で渡す
+- Session への Recipe の追加は、選ばれた Item を ID で、打たれた名前の Item を表示名で、別々に読む。2つが同じ時点のものである必要はない。材料は1行ずつ独立に Item に結び付け、2つの読み出しの結果を突き合わせて決める規則がないためである。間に rename が入ると、同じ Item へのつながりで表示名の違う品目が2つできうるが、rename を挟んで2回追加したときと同じく、規則の範囲に収まる（「集約と不変条件」）。同じ時点で読む必要が出たら、ID と表示名を一度に渡して読むメソッドを Repository に足し、具象の中で1回の読み出しにする。`TransactionRunner` で包む形にしないのは、`TransactionRunner` が複数の集約への書き込みをまとめるためのもので（「UseCase の方針」）、読み出しだけの UseCase に持ち込む理由がないためである
+
+Item と Recipe の Repository の具象（`RoomItemRepository`・`RoomRecipeRepository`）を作り、Android と iOS の両方でテストで確かめた。表と保存の書き方は「データ層の方針」に書いた。
+
+DI のグラフ（`AppGraph`）は、Factory でプラットフォームが作ったデータベースの作り方（`RoomDatabase.Builder`）を受け取り、ドライバを決めてデータベースを1つだけ作る（`buildRecipeDeckDatabase`。ドライバは `:shared:data` の中で決める）。そのデータベースで Item と Recipe の Repository と `TransactionRunner` の具象を作り、Item と Recipe だけで動く UseCase（検索・作成・rename、Recipe の作成・編集）を組み立てる。Session も使う UseCase は 16-3 で足す。グラフを実行時に作るのは 17 のままで、今は Metro のコンパイル時の検証だけで組み立てを確かめている。
+
+- データベースの作り方は、置き場所がプラットフォームで違うので、`:shared:data` の `androidMain`・`iosMain` に1つずつ置く（`recipeDeckDatabaseBuilder`）。グラフの外から渡すのは、Android では作るのに `Context` が要り、共通のコードのグラフでは作れないためである。17 では、Android は `:androidApp` が `Context` を渡して作り、iOS は `:shared:app` の `iosMain` が作って、グラフの Factory に渡す
+- Android は、ファイル名を渡すと Room がアプリのデータベースのフォルダ（`Context.getDatabasePath`）に置く
+- iOS は、Application Support のフォルダに置く。Documents のフォルダは、ユーザーが作った書類を置く場所で、設定によってはファイルのアプリからユーザーに見えるためである。どちらも iCloud のバックアップの対象になる
+- クエリを動かすコルーチンは、Room の既定（Android・iOS とも `Dispatchers.IO`。room3-runtime 3.0.3）のままにする
 
 ## AI / ML
 
@@ -409,19 +454,19 @@ PoC は完了済み。
 
 - Repository の分け方
 - Web 版など、Android と iOS 以外の Repository の実装。Android と iOS のローカルの保存は Room 3（「技術構成」）
-- Room のテーブル・主キー・インデックス。Recipe の材料の行の主キー（行ごとの固有 ID か、所属と並び順か）もあわせて決める。domain の Recipe の材料の行は ID を持たない（「集約と不変条件」参照）
+- ShoppingSession と購入の記録の Room のテーブル・主キー・インデックス（「実装の進め方」の 16-3）。Item と Recipe の表は「データ層の方針」に書いた
 - 購入の記録の保存の具象（「データ層の方針」）で、データ層の実装時に確かめること
   - 購入の記録だけが読めない失敗が起きうるか。起きうるなら、買い物リストを出すときに全体を `Unexpected` にする扱い（「実装の進め方」の 12）を見直す
   - 購入の記録の読み込みに、Repository の中でメモリのキャッシュを持たせるか。持たせる場合も、書き込みは保存し終えてから完了とする（裏で書くと、タスクキルで消える）
 - Recipe の写真に関する未決定事項（詳細は [photo.md](photo.md) 参照）
 - Recipe 削除機能の実装時、編集画面からの保存によって削除済み Recipe を再作成しないようにするか。現時点では決めていない。今の実装は新規作成と同一の `save` メソッドで上書き保存する構成となっている。あわせて、Session から元の Recipe へ遷移しようとしたときに Recipe が削除されていた場合の見せ方も決める
+- Item の削除を設けるとき、rename が削除済みの Item を作り直さないようにする。`RenameItemUseCase` は、変える Item を読んでから保存するまでをトランザクションで包んでおらず、保存（`ItemRepository.save`）は同じ ID の Item が無ければ作る。そのため、間に削除が入ると、削除した Item が rename で戻る。Recipe の編集は、読んでから保存するまでを `TransactionRunner` の中で行うので、間に削除は入らない。rename も1つのトランザクションにするか、rename の保存を「上書きだけ（無ければ失敗）」にするかを、削除を作るときに決める
 - 変更がない状態での保存要求時にも永続化処理を行うかどうか。現時点では無条件で保存する実装となっており、将来のサーバー同期導入時に方針を決定する
-- Item の表示名の一致判定（検索の部分一致、作成時と rename 時の重複検知の完全一致）をどこで行うか。現時点では、いずれも Repository から全件を読み込み、UseCase で絞り込んでいる。Recipe の作成・編集と Session への Recipe の追加の UseCase も、材料の新しい表示名を既存の Item と照らすために、Item を全件読み込んでいる。表示名の一致の規則（何を同じ名前とみなすか）を domain に置くかも、あわせて決める。データ層の実装時に、表示名を Repository へ渡す形へ移すかを、検索・作成・rename で揃えて決める。Web 版では全件の通信が重くなること、SQLite の `LIKE` は英字の大文字・小文字を区別せず `%` や `_` のエスケープも必要なことを踏まえる。移した場合も、前後の空白の除去と空入力の扱いは今の場所（表示名は `NotBlankString`、検索語は UseCase）に残す。あわせて、同じ表示名の Item の作成や rename が同時に行われた場合の重複を、データ層でどう防ぐかも決める（Room の `@Transaction` で足りるか、一意制約が要るかなど）
 - Recipe の保存時や Session への Recipe の追加時に既存の Item を使ったことを、材料の行単位で返す必要があるか。現時点では、使った既存の Item の一覧だけを返している。UI の実装時に確認する
   - Recipe の編集で、Item を選んであった材料の名前を打ち直して既存の Item と一致した場合も、今の規則どおり確認なしでその Item を使う。変わるのは編集中の Recipe のその材料だけで、元の Item もほかの Recipe も変わらないため。確認を挟みたくなっても、保存の前に UI が確かめるか、保存の後に結果で知らせるかの違いで、`EditRecipeUseCase` は変わらない
 - 保存先から集約を読み戻す方法。ShoppingSession のコンストラクタは private なので、データ層の実装時に、中身を受け取って「集約と不変条件」の規則を確かめ、満たせば集約を作り、満たさなければ null を返す生成関数を domain に足す。内訳の ID は購入済みチェックの鍵なので、読み戻しても変わらないようにする
 - SessionItem の ID を残すか。1つの Session の中では SessionItem は Item へのつながりと表示名の組で一意に決まるので、行がその組で品目を指せば ID を外せる。ただし、品目の指し方が変わる操作（Session 限定の品目を Item として登録する、Item を統合する）では、ID がある方が行を書き換えずに済む。それらの操作を決めるときにあわせて見直す。候補から Session の品目を選んだことを受け取る入力（「実装の進め方」の 13）も品目の ID で指す予定なので、ID を外すなら、その入力の指し方もあわせて見直す
-- 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合は、呼び出し側が個別に対処できることがないため、意味としては Repository の `Unexpected` に当たる。ただし `Unexpected` の中身が `Throwable` に固定されているので、データ層の実装時に見直す。ログもデータ層で残し、仕組みはそのときに決める。`RoomTransactionRunner` が捕まえた例外も、同じ仕組みでログに残す。ブロックの中の不具合も失敗に紛れるため（「データ層の方針」）。買い物リストの分量は表示で足すので、domain の買い物リストでは桁あふれは起きない（足し方を domain に移したら見直す。[spec.md](spec.md#買い物リスト表示)）
+- 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合の扱いは、「データ層の方針」に書いた。買い物リストの分量は表示で足すので、domain の買い物リストでは桁あふれは起きない（足し方を domain に移したら見直す。[spec.md](spec.md#買い物リスト表示)）
 - 同じ端末で Session への追加が同時に走った場合（連打など）の扱い。UseCase は進行中の Session を読んでから保存するため、片方の追加が失われるか、データ層の一意制約で失敗しうる。データ層の実装時に決める
   - 1つの集約の中の読み書きなので、`TransactionRunner`（複数の集約を1つのトランザクションにまとめるためのもの）を広げるより、楽観ロック（版の番号を持たせ、保存のときに違えば失敗にする）か、Repository に変え方を渡して中で1つのトランザクションにする形を先に検討する
   - 購入の記録は別の集約なので、この問題の対象外（「集約と不変条件」）
@@ -431,3 +476,7 @@ PoC は完了済み。
 - ML の判定閾値（しきい値）
 - Android プラットフォームにおける読み仮名変換の実装方式
 - iOS の最小の版（今は 18.5。「モジュール構成」）を、配る相手などを踏まえて改めて決める
+- 保存先に規則を満たさない行が見つかったときに、データを直すか。今は読み戻すときに失敗（`Unexpected`）にするだけで、直さない（「データ層の方針」）。たとえば前後に空白の付いた表示名 ` たまねぎ` は、`たまねぎ` に直せば読めるようになる。ただし、別の Item がすでに `たまねぎ` なら一意制約でぶつかり、2つの Item をまとめる話（merge）になる。まとめることは自動では行わない方針（[spec.md](spec.md#暗黙的な自動統合silent-mergeは禁止)）なので、自動で直せる範囲と、ユーザーに知らせる場合を分けて決める。急ぎではない
+- 端末の空き容量が足りずに書けない失敗を、ほかの失敗と分けてユーザーに伝えるか。今は Room の失敗はすべて `Unexpected`（汎用のエラー）になる。空き容量の不足は、ユーザーが空き容量を作れば直る失敗なので、汎用のエラーでは何をすれば直るかが伝わらない。分けるなら、Repository の失敗型に種類を足し（「データ層の方針」）、受け取る UseCase の結果にも足し、画面での見せ方を決める。UI（17）で、画面の作りとあわせて決める
+- ログの仕組み。UI（17）で決める。Repository と `TransactionRunner` の具象が捕まえた例外は、`Unexpected` の中身（`cause`）として UseCase を通り、ViewModel に届く。そこで1か所で残す形にし、data では残さない。data でも残すと、同じ失敗が二重に残るためである。`RoomTransactionRunner` が捕まえたブロックの中の不具合も失敗に紛れるので（「データ層の方針」）、このログで見つける
+- Room のスキーマの書き出し（`exportSchema`）と、データベースの版の上げ方（移行）。今は版 1 で、スキーマを書き出していない。リリースまでは、表を変えても版 1 のまま変えてよい（開発中の端末では、アプリを入れ直して作り直す）。リリースの前に、スキーマを書き出してリポジトリに置くか、移行をどう書いてどう確かめるかを決める

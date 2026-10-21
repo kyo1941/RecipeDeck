@@ -13,6 +13,7 @@ import com.example.recipedeck.domain.recipe.RecipeRepository
 import com.example.recipedeck.domain.recipe.RecipeRepositoryFailure
 import com.example.recipedeck.domain.recipe.RecipeStatus
 import com.example.recipedeck.usecase.ingredient.IngredientInput
+import com.example.recipedeck.usecase.ingredient.typedDisplayNames
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 
@@ -34,7 +35,7 @@ class CreateRecipeUseCase(
             ?.let { return CreateRecipeResult.IngredientDisplayNameRequired(it.toImmutableList()) }
 
         val outcome = transactionRunner.run {
-            val existingItems = when (val found = itemRepository.findAll()) {
+            val existingItems = when (val found = itemRepository.findByDisplayNames(ingredients.typedDisplayNames())) {
                 is Outcome.Success -> found.value.associateBy { it.displayName }
                 is Outcome.Failure -> rollback(found.error.toCreateRecipeResult())
             }

@@ -29,7 +29,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(project(":shared:domain"))
-            implementation(libs.androidx.room.runtime)
+            api(libs.androidx.room.runtime)
             implementation(libs.androidx.sqlite.bundled)
         }
         commonTest.dependencies {
@@ -44,7 +44,14 @@ kotlin {
 }
 
 dependencies {
-    listOf("kspAndroidDeviceTest", "kspIosArm64Test", "kspIosSimulatorArm64Test").forEach { configuration ->
+    listOf(
+        "kspAndroid",
+        "kspIosArm64",
+        "kspIosSimulatorArm64",
+        "kspAndroidDeviceTest",
+        "kspIosArm64Test",
+        "kspIosSimulatorArm64Test",
+    ).forEach { configuration ->
         add(configuration, libs.androidx.room.compiler)
     }
 }
