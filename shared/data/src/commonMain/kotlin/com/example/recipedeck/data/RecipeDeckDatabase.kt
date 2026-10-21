@@ -4,6 +4,7 @@ import androidx.room3.ConstructedBy
 import androidx.room3.Database
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.example.recipedeck.data.item.ItemDao
 import com.example.recipedeck.data.item.ItemEntity
 import com.example.recipedeck.data.recipe.RecipeDao
@@ -21,3 +22,8 @@ abstract class RecipeDeckDatabase : RoomDatabase() {
 expect object RecipeDeckDatabaseConstructor : RoomDatabaseConstructor<RecipeDeckDatabase> {
     override fun initialize(): RecipeDeckDatabase
 }
+
+internal const val RECIPE_DECK_DATABASE_FILE_NAME = "recipe-deck.db"
+
+fun buildRecipeDeckDatabase(builder: RoomDatabase.Builder<RecipeDeckDatabase>): RecipeDeckDatabase =
+    builder.setDriver(BundledSQLiteDriver()).build()

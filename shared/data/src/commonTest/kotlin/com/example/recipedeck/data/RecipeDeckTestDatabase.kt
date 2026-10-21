@@ -1,7 +1,6 @@
 package com.example.recipedeck.data
 
 import androidx.room3.RoomDatabase
-import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 
@@ -19,9 +18,7 @@ private fun runTestWith(
     builder: RoomDatabase.Builder<RecipeDeckDatabase>,
     block: suspend TestScope.(RecipeDeckDatabase) -> Unit,
 ) = runTest {
-    val database = builder
-        .setDriver(BundledSQLiteDriver())
-        .build()
+    val database = buildRecipeDeckDatabase(builder)
     try {
         block(database)
     } finally {

@@ -29,12 +29,13 @@
 | `:androidApp` | Android アプリの入口。`MainActivity` だけを置き、`:shared:app` の画面を表示する |
 | `:shared:domain` | ドメイン層の KMP モジュール。ターゲットは JVM・iosArm64・iosSimulatorArm64。パッケージは `amount` / `item` / `recipe` / `shopping`。Repository の interface もここに置く |
 | `:shared:usecase` | UseCase の KMP モジュール。`:shared:domain` に依存し、ターゲットも同じ。パッケージは `ingredient` / `item` / `recipe` / `shopping`。`ingredient` には、Recipe と Session の両方で使う材料の入力を置く |
-| `:shared:data` | データ層の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:domain` に依存し、Repository と `TransactionRunner` の具象を置く |
+| `:shared:data` | データ層の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:domain` に依存し、Repository と `TransactionRunner` の具象、製品のデータベースの作り方を置く。Room は `api` で公開する（下の段落） |
 | `:shared:ui` | 画面の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:usecase` に依存する。今は仮の画面だけを置く |
 | `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui`・`:shared:usecase`・`:shared:data` に依存し、DI の組み立てを持つ。アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
 | `iosApp` | iOS アプリの入口。Gradle のモジュールではなく Xcode のプロジェクトで、`:shared:app` の framework を組み込み、その画面を表示する |
 
 DI の組み立てを `:shared:ui` ではなく `:shared:app` に置くのは、データ層の具象（`:shared:data`）を組み立てる側が知る必要があるためである。`:shared:ui` に置くと、画面や ViewModel のコードからもデータ層の具象が見えてしまう。分ければ、`:shared:ui` は `:shared:usecase` にしか依存しないので、UI からデータ層の具象を使うとビルドが落ちる。
+`:shared:data` は Room を `api` で公開する。`:shared:app` の DI の組み立てが、データベース（`RecipeDeckDatabase`。Room の `RoomDatabase` を継ぐ）とその作り方（`RoomDatabase.Builder`）を扱うためである。`:shared:ui` は `:shared:data` に依存しないので、画面のコードから Room は見えない。表の形（Entity）と DAO は `:shared:data` の `internal` にして、外に出さない。
 
 `:shared:domain` と `:shared:usecase` は Android の API を使わないので、Android のターゲットを持たない。Android のターゲットを持つモジュール（`:shared:ui` など）からは、JVM のターゲットの成果物を使う。
 `:shared:data` は、Android でデータベースの置き場所を決めるのに Android の API（`Context`）を使うので、Android のターゲットを持つ。JVM のターゲットは持たない。アプリが動くのは Android と iOS だけで、Room の JVM の経路は iOS と同じコードなので、テストは iOS シミュレータで流せば足りるためである。iOS シミュレータでのテストが遅くて困ったときに、JVM のターゲットを足す。
@@ -382,7 +383,7 @@ UI を作るときに足す UseCase（今は無い）：
 - Session を完了する。完了できないと進行中の Session が残り続け、次の買い物を始められない。完了日時の規則（「集約と不変条件」）の扱いも、そのときに決める
 
 15 では、CMP の構成に移し、両方のアプリが共通の仮の画面を表示するところまでを作った。モジュールの分け方と依存の向きは「モジュール構成」、DI は「技術構成」、重複候補の判定の機能フラグは「AI / ML」に書いた。
-DI のグラフが組み立てるのは、候補を出さない Finder と `FindDuplicateCandidatesUseCase` だけである。ほかの UseCase は Repository の具象が要るので、16・17 で足す。グラフを実行時に作るのは、画面に UseCase を渡す 17 からで、それまでは Metro のコンパイル時の検証だけで組み立てを確かめる。
+DI のグラフが組み立てるのは、候補を出さない Finder と `FindDuplicateCandidatesUseCase` だけだった（16-2 で Item と Recipe の UseCase を足した）。グラフを実行時に作るのは、画面に UseCase を渡す 17 からで、それまでは Metro のコンパイル時の検証だけで組み立てを確かめる。
 Kotlin を 2.4.21 に上げ、Kotlin 2.2 のために置いていた制約（kotlinx-collections-immutable を 0.4.0 に留める、`Instant`・`Uuid` の `OptIn`）を外した。
 
 16 は、1回に考える論点を絞るため、次のように分けて進める。Repository の具象を DI のグラフに足すのは、それぞれの中で行う。
@@ -405,6 +406,13 @@ Kotlin を 2.4.21 に上げ、Kotlin 2.2 のために置いていた制約（kot
 - Session への Recipe の追加は、選ばれた Item を ID で、打たれた名前の Item を表示名で、別々に読む。2つが同じ時点のものである必要はない。材料は1行ずつ独立に Item に結び付け、2つの読み出しの結果を突き合わせて決める規則がないためである。間に rename が入ると、同じ Item へのつながりで表示名の違う品目が2つできうるが、rename を挟んで2回追加したときと同じく、規則の範囲に収まる（「集約と不変条件」）。同じ時点で読む必要が出たら、ID と表示名を一度に渡して読むメソッドを Repository に足し、具象の中で1回の読み出しにする。`TransactionRunner` で包む形にしないのは、`TransactionRunner` が複数の集約への書き込みをまとめるためのもので（「UseCase の方針」）、読み出しだけの UseCase に持ち込む理由がないためである
 
 Item と Recipe の Repository の具象（`RoomItemRepository`・`RoomRecipeRepository`）を作り、Android と iOS の両方でテストで確かめた。表と保存の書き方は「データ層の方針」に書いた。
+
+DI のグラフ（`AppGraph`）は、Factory でプラットフォームが作ったデータベースの作り方（`RoomDatabase.Builder`）を受け取り、ドライバを決めてデータベースを1つだけ作る（`buildRecipeDeckDatabase`。ドライバは `:shared:data` の中で決める）。そのデータベースで Item と Recipe の Repository と `TransactionRunner` の具象を作り、Item と Recipe だけで動く UseCase（検索・作成・rename、Recipe の作成・編集）を組み立てる。Session も使う UseCase は 16-3 で足す。グラフを実行時に作るのは 17 のままで、今は Metro のコンパイル時の検証だけで組み立てを確かめている。
+
+- データベースの作り方は、置き場所がプラットフォームで違うので、`:shared:data` の `androidMain`・`iosMain` に1つずつ置く（`recipeDeckDatabaseBuilder`）。グラフの外から渡すのは、Android では作るのに `Context` が要り、共通のコードのグラフでは作れないためである。17 では、Android は `:androidApp` が `Context` を渡して作り、iOS は `:shared:app` の `iosMain` が作って、グラフの Factory に渡す
+- Android は、ファイル名を渡すと Room がアプリのデータベースのフォルダ（`Context.getDatabasePath`）に置く
+- iOS は、Application Support のフォルダに置く。Documents のフォルダは、ユーザーが作った書類を置く場所で、設定によってはファイルのアプリからユーザーに見えるためである。どちらも iCloud のバックアップの対象になる
+- クエリを動かすコルーチンは、Room の既定（Android・iOS とも `Dispatchers.IO`。room3-runtime 3.0.3）のままにする
 
 ## AI / ML
 
