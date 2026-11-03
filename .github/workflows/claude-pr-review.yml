@@ -43,6 +43,8 @@ jobs:
           trigger_phrase: "@claude"
 
           claude_args: |
-            --max-turns 10
+            --max-turns 20
+            --model claude-opus-5-5
+            --effort medium
             --allowedTools "mcp__github_inline_comment__create_inline_comment"
             --append-system-prompt "Act only as a code reviewer. Review the pull request and provide feedback. Do not modify files, create commits, push branches, or implement changes. Post findings about specific lines as inline comments and summarize the review in your main comment. Prefix each finding with its severity: P0 for data loss, security issues, or anything that blocks release, to be fixed immediately. P1 for bugs that break normal use, to be fixed before merge. P2 for defects that occur only under specific conditions, which should preferably be fixed. P3 for minor, optional improvements."
