@@ -1,6 +1,7 @@
 package com.example.recipedeck.domain.shopping
 
 import com.example.recipedeck.domain.NotBlankString
+import com.example.recipedeck.domain.StoredAggregateRestoration
 import com.example.recipedeck.domain.amount.Multiplier
 import com.example.recipedeck.domain.recipe.RecipeId
 import kotlinx.collections.immutable.ImmutableList
@@ -84,5 +85,28 @@ data class ShoppingSession private constructor(
             recipes = persistentListOf(),
             items = persistentListOf(),
         )
+
+        @StoredAggregateRestoration
+        fun of(
+            id: ShoppingSessionId,
+            state: SessionState,
+            createdAt: Instant,
+            recipes: ImmutableList<SessionRecipe>,
+            items: ImmutableList<SessionItem>,
+        ): ShoppingSession? {
+            val itemIds = items.map { it.id }.toSet()
+            val recipeIngredients = recipes.flatMap { it.ingredients }
+            val referencedItemIds = recipeIngredients.map { it.sessionItemId }.toSet()
+            val sourceIds = recipeIngredients.map { it.id } + items.mapNotNull { it.manualAddition?.id }
+            val satisfiesRules =
+                items.distinctBy { it.displayName to it.itemId }.size == items.size &&
+                    itemIds.size == items.size &&
+                    recipes.distinctBy { it.id }.size == recipes.size &&
+                    sourceIds.toSet().size == sourceIds.size &&
+                    itemIds.containsAll(referencedItemIds) &&
+                    items.all { it.id in referencedItemIds || it.manualAddition != null } &&
+                    (state !is SessionState.Completed || state.completedAt >= createdAt)
+            return if (satisfiesRules) ShoppingSession(id, state, createdAt, recipes, items) else null
+        }
     }
 }

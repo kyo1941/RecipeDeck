@@ -6,17 +6,22 @@ import com.example.recipedeck.domain.amount.QuantityNotation
 import com.example.recipedeck.domain.amount.multiplierOrFail
 import com.example.recipedeck.domain.amount.quantityOrFail
 import com.example.recipedeck.domain.NotBlankString
+import com.example.recipedeck.domain.StoredAggregateRestoration
 import com.example.recipedeck.domain.item.ItemId
 import com.example.recipedeck.domain.notBlankStringOrFail
 import com.example.recipedeck.domain.recipe.RecipeId
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
 
+@OptIn(StoredAggregateRestoration::class)
 class ShoppingSessionTest {
     private val createdAt = Instant.parse("2026-10-04T10:00:00Z")
     private val mapoTofu = RecipeId("mapo-tofu")
@@ -25,6 +30,7 @@ class ShoppingSessionTest {
     private val greenOnion = notBlankStringOrFail("長ネギ")
     private val doubanjiang = notBlankStringOrFail("豆板醤")
     private val onePiece = Amount(quantityOrFail(1), QuantityNotation.FRACTION, AmountUnit.PIECE)
+    private val greenOnionItem = SessionItem(SessionItemId("green-onion-item"), greenOnion, greenOnionId, manualAddition = null)
 
     private fun ingredient(
         displayName: NotBlankString,
@@ -35,6 +41,17 @@ class ShoppingSessionTest {
 
     private fun ShoppingSession.withAddedMapoTofu(vararg ingredients: AddedRecipeIngredient) =
         withAddedRecipe(mapoTofu, notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), ingredients.toList())
+
+    private fun sourceOf(id: String, item: SessionItem) = SessionRecipeIngredient(ShoppingListItemSourceId(id), item.id, onePiece, isExcluded = false)
+
+    private fun mapoTofuRecipe(vararg ingredients: SessionRecipeIngredient) =
+        SessionRecipe(SessionRecipeId("mapo-tofu-recipe"), mapoTofu, notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), ingredients.toList().toImmutableList())
+
+    private fun restore(recipes: List<SessionRecipe>, items: List<SessionItem>, state: SessionState = SessionState.Active) =
+        ShoppingSession.of(ShoppingSessionId("session"), state, createdAt, recipes.toImmutableList(), items.toImmutableList())
+
+    private fun sessionOrFail(recipes: List<SessionRecipe>, items: List<SessionItem>, state: SessionState = SessionState.Active) =
+        assertNotNull(restore(recipes, items, state))
 
     @Test
     fun 作ったSessionは進行中で中身が空になる() {
@@ -135,8 +152,6 @@ class ShoppingSessionTest {
         assertEquals(emptyList(), session.items)
     }
 
-    // TODO: 手動追加のある Session を作る手段（手動追加の操作か、保存先からの読み戻し）がまだないため、手動追加が内訳の最後に並ぶことは確かめていない。
-    //  手段ができたら確かめる。
     @Test
     fun 買い物リストはSessionItemごとに項目を作り全てのSession内のRecipeからその品目の材料を内訳として集める() {
         val halfPiece = Amount(quantityOrFail(1, 2), QuantityNotation.FRACTION, AmountUnit.PIECE)
@@ -165,8 +180,6 @@ class ShoppingSessionTest {
         )
     }
 
-    // TODO: 手動追加のある Session を作る手段（手動追加の操作か、保存先からの読み戻し）がまだないため、Recipe 由来の内訳がなく手動追加だけの品目も買い物項目になることは確かめていない。
-    //  手段ができたら確かめる。
     @Test
     fun 材料が全て除外された品目も除外した内訳を持つ項目として買い物リストに残す() {
         val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion, greenOnionId, isExcluded = true))
@@ -194,5 +207,99 @@ class ShoppingSessionTest {
     @Test
     fun 品目のないSessionの買い物リストは空になる() {
         assertEquals(emptyList(), ShoppingSession.create(createdAt).toShoppingList(purchasedSourceIds = emptySet()))
+    }
+
+    @Test
+    fun 手動追加は品目の内訳の最後に並ぶ() {
+        val manualAddition = ManualAddition(ShoppingListItemSourceId("manual-green-onion"), onePiece)
+        val session = sessionOrFail(
+            recipes = listOf(mapoTofuRecipe(SessionRecipeIngredient(ShoppingListItemSourceId("mapo-tofu-green-onion"), greenOnionItem.id, amount = null, isExcluded = false))),
+            items = listOf(greenOnionItem.copy(manualAddition = manualAddition)),
+        )
+
+        val sources = session.toShoppingList(purchasedSourceIds = setOf(manualAddition.id)).single().sources
+
+        assertEquals(
+            listOf(
+                ShoppingListItemSource.FromRecipe(ShoppingListItemSourceId("mapo-tofu-green-onion"), notBlankStringOrFail("麻婆豆腐"), multiplierOrFail(2), amount = null, isExcluded = false, isPurchased = false),
+                ShoppingListItemSource.Manual(manualAddition.id, onePiece, isPurchased = true),
+            ),
+            sources,
+        )
+    }
+
+    @Test
+    fun 手動追加だけの品目も買い物項目になる() {
+        val manualAddition = ManualAddition(ShoppingListItemSourceId("manual-green-onion"), amount = null)
+        val session = sessionOrFail(recipes = emptyList(), items = listOf(greenOnionItem.copy(manualAddition = manualAddition)))
+
+        val item = session.toShoppingList(purchasedSourceIds = emptySet()).single()
+
+        assertEquals(greenOnionItem.id, item.sessionItemId)
+        assertEquals(listOf<ShoppingListItemSource>(ShoppingListItemSource.Manual(manualAddition.id, amount = null, isPurchased = false)), item.sources)
+    }
+
+    @Test
+    fun 操作で作ったSessionの中身を渡すと同じSessionに戻る() {
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu(ingredient(greenOnion, greenOnionId), ingredient(doubanjiang, isExcluded = true))
+
+        assertEquals(session, ShoppingSession.of(session.id, session.state, session.createdAt, session.recipes, session.items))
+    }
+
+    @Test
+    fun 完了日時が作成日時と同じ完了したSessionは戻せる() {
+        val completed = SessionState.Completed(createdAt)
+
+        assertEquals(completed, sessionOrFail(recipes = emptyList(), items = emptyList(), state = completed).state)
+    }
+
+    @Test
+    fun 完了日時が作成日時より前の完了したSessionは戻せない() {
+        assertNull(restore(recipes = emptyList(), items = emptyList(), state = SessionState.Completed(Instant.parse("2026-10-04T09:59:59Z"))))
+    }
+
+    @Test
+    fun Itemへのつながりと表示名がどちらも同じ品目が2つあると戻せない() {
+        val sameGreenOnionItem = greenOnionItem.copy(id = SessionItemId("another-green-onion"))
+
+        assertNull(
+            restore(
+                recipes = listOf(mapoTofuRecipe(sourceOf("first", greenOnionItem), sourceOf("second", sameGreenOnionItem))),
+                items = listOf(greenOnionItem, sameGreenOnionItem),
+            ),
+        )
+    }
+
+    @Test
+    fun 品目のIDが重複していると戻せない() {
+        val doubanjiangItem = SessionItem(greenOnionItem.id, doubanjiang, itemId = null, manualAddition = null)
+
+        assertNull(restore(recipes = listOf(mapoTofuRecipe(sourceOf("green-onion", greenOnionItem))), items = listOf(greenOnionItem, doubanjiangItem)))
+    }
+
+    @Test
+    fun Session内のRecipeのIDが重複していると戻せない() {
+        val first = mapoTofuRecipe(sourceOf("first", greenOnionItem))
+        val second = first.copy(ingredients = persistentListOf(sourceOf("second", greenOnionItem)))
+
+        assertNull(restore(recipes = listOf(first, second), items = listOf(greenOnionItem)))
+    }
+
+    @Test
+    fun 材料と手動追加で内訳のIDが重複していると戻せない() {
+        val duplicatedId = ShoppingListItemSourceId("duplicated")
+        val recipe = mapoTofuRecipe(SessionRecipeIngredient(duplicatedId, greenOnionItem.id, onePiece, isExcluded = false))
+
+        assertNull(restore(recipes = listOf(recipe), items = listOf(greenOnionItem.copy(manualAddition = ManualAddition(duplicatedId, onePiece)))))
+    }
+
+    @Test
+    fun 材料が指す品目がSessionにないと戻せない() {
+        assertNull(restore(recipes = listOf(mapoTofuRecipe(sourceOf("green-onion", greenOnionItem))), items = emptyList()))
+    }
+
+    @Test
+    fun 材料からも手動追加からも指されない品目があると戻せない() {
+        assertNull(restore(recipes = emptyList(), items = listOf(greenOnionItem)))
     }
 }
