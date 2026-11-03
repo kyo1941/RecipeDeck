@@ -241,9 +241,15 @@ erDiagram
   - 手動追加（`ManualAddition?`）は、品目の行の、内訳の ID の列と分量の4つの列で表す。手動追加の ID が空なのに分量の列が埋まっている行は、規則を満たさない行として読み戻しで失敗にする
   - 進行中の Session は最大1件（「集約と不変条件」）を、`shopping_session` のトリガーで守る。進行中の行（完了日時が空の行）を入れる・更新するときに、ほかに進行中の Session があれば拒む。Room の `@Index` は進行中の行だけに張る一意索引を書けず、Room の外で作った索引は、Room が移行のときの検証で索引をすべて比べるので食い違う（room3-runtime 3.0.3 の `SchemaInfoUtil.readIndices`・`TableInfo.equalsCommon`）。トリガーは Room が検証しない（Room が触るトリガーは、FTS 用に自分で作ったものだけ）。進行中を表す列を足して一意制約を張る形は採らない。完了日時の列と同じことを2つの列で持つことになり、食い違わないことを書く側の SQL でしか守れないためである。トリガーはデータベースの中にあるので、どの SQL から書いても拒む
   - トリガーは Room が作らないので、`buildRecipeDeckDatabase` でデータベースを作るときの callback で作る。テストも `buildRecipeDeckDatabase` を通るので、同じトリガーが入る
+  - 購入の記録は `purchase_record` 表に置く。1行が購入済みの内訳1件で、行があれば購入済み、なければ未購入とし、購入済みかどうかの列は持たない。未購入の表し方が「行がない」の1つになり、書き込みが値を指定する形（購入済みにするなら入れ、未購入にするなら消す）にそのまま合うためである。主キーは（Session の ID, 内訳の ID）
+  - 購入の記録から Session への外部キーは張り、`NO ACTION` にする。守るのは、指す Session が在ることだけである。`CASCADE` にしないのは、Session を削除するときに購入の記録をどうするか（[spec.md](spec.md#未確定事項)）を、表の形で先に決めないためである
+  - 購入の記録から内訳への外部キーは張らない。内訳は Session 内の材料と手動追加の2つの表に分かれ、Session の保存で中の行を入れ直すためである
   - Recipe の状態・分量の入力形式・単位は、Kotlin の enum の名前ではなく、data で決めた固定の文字列（`draft`・`fraction`・`gram` など）で持つ。Room の既定（enum の名前をそのまま書く）では、enum の名前を変えただけで保存済みの値が読めなくなるためである。書く側の変換は `when` で書き、enum に値が増えたらコンパイルで分かるようにする
 - Recipe の保存は、Recipe の行を上書きし、その Recipe の材料の行をすべて消して並び順を振り直して入れる。3つの書き込みは Repository の中で1つのトランザクション（`withWriteTransaction`）にまとめる。読み出しも、Recipe の行と材料の行を1つの読み出しのトランザクション（`withReadTransaction`）で読み、違う時点の行が混ざらないようにする。`TransactionRunner` の中から呼ばれたときは、Room が外側の接続を使い回し、中のトランザクションを `SAVEPOINT` にするので、外側で取り消せば一緒に取り消される（room3-runtime 3.0.3 の `ConnectionPoolImpl`。`RoomRecipeRepositoryTransactionTest` で確かめている）
-- Session の保存も Recipe と同じく、Session の行を上書きし、その Session の中の行をすべて消して入れ直す。1つの書き込みのトランザクションにまとめ、読み出しも1つの読み出しのトランザクションで読む。Session の行を消さずに上書きするので、Session を指す購入の記録は消えない。消す順は Session 内の Recipe（材料も `CASCADE` で消える）が先、品目が後（材料から指されているため）
+- Session の保存も Recipe と同じく、Session の行を上書きし、その Session の中の行をすべて消して入れ直す。1つの書き込みのトランザクションにまとめ、読み出しも1つの読み出しのトランザクションで読む。購入の記録は Session の行だけを指し、Session の中の行は指さないので、中の行を入れ直しても購入の記録は消えない。消す順は Session 内の Recipe（材料も `CASCADE` で消える）が先、品目が後（材料から指されているため）
+- 購入の記録の書き込み（`record`）は、1つの書き込みのトランザクションで、購入済みにするなら `INSERT … ON CONFLICT(session_id, source_id) DO NOTHING`、未購入にするなら `DELETE … WHERE session_id = ? AND source_id IN (…)` と書く。どちらも何度書いても結果が同じになる。読み込みは、Session の ID で引く1回の問い合わせにする
+  - 購入の記録だけが読めない失敗は、起きる原因がない。読むのは文字列の ID だけで、読み戻しで確かめる規則がなく、Session と同じデータベースの同じ接続で読むためである。ファイルや接続の失敗なら、Session も読めない
+  - 読み込みに、メモリのキャッシュは持たない。読むのは主キーの先頭の列で引く1回で、チェックの頻度では遅さが問題にならない。持つと、書いた後に古い値を返さないための作りが要る。遅いと測れたときに足す
 - 上書きする保存（同じ ID が無ければ入れ、あれば上書きする）は、DAO の SQL に `INSERT … ON CONFLICT(id) DO UPDATE` と書き、ID がぶつかったときだけ上書きする。表示名などほかの一意制約にぶつかれば、例外になって `Unexpected` になる。Room の `@Upsert` と `@Insert(onConflict = REPLACE)` は使わない。ほかの表も同じ書き方にする
   - `@Upsert` は、挿入がどの一意制約で失敗しても、主キーでの更新に切り替える（room3-runtime 3.0.3 の `EntityUpsertAdapter`）。新しい Item の表示名がぶつかると、0行の更新で黙って成功し、保存されていない Item の ID を UseCase が返してしまう
   - `REPLACE` は、ぶつかった相手の行を消してから入れる。表示名がぶつかると、同じ名前の別の Item が消える
@@ -303,7 +309,7 @@ Item 作成 UseCase は、重複候補をいつユーザーに見せるか（入
 手動追加の操作はまだないので、手動追加の内訳は、読み戻しの生成関数（`ShoppingSession.of`。16-3 で足した）で作った Session でテストしている。手動追加が内訳の最後に並ぶことと、手動追加だけの品目も買い物項目になることを、`toShoppingList()` を通して確かめている。
 
 12 では、`ShowShoppingListUseCase` が、進行中の Session に続けてその Session の購入の記録を読み、購入済みの内訳 ID を `toShoppingList` に渡すようにした。
-購入の記録が読めなければ、買い物リストを返さずに `Unexpected` を返す（今の決定）。購入状態の見えない買い物リストを見せても解決にならないためである。購入の記録は Session と同じデータベースに置くので、購入の記録だけが読めない失敗は起きにくいと見ている。起きうると分かったときだけ、この扱いを見直す（確かめることは未確定事項）。
+購入の記録が読めなければ、買い物リストを返さずに `Unexpected` を返す（今の決定）。購入状態の見えない買い物リストを見せても解決にならないためである。購入の記録だけが読めない失敗は、起きる原因がないことを 16-3 で確かめた（「データ層の方針」）。
 買い物項目を購入済み／未購入にする UseCase（`MarkShoppingListItemPurchasedUseCase`）は、品目（SessionItem の ID）と、付けたい値を受け取る。反転ではなく値を受け取るので、同じ要求を繰り返しても状態がずれない。
 進行中の Session と購入の記録を読んで買い物リストを作り、その品目の買う内訳（`sourcesToBuy`）の ID を、購入の記録の Repository に1回で書く。
 購入状態は使わないが、買う内訳を買い物項目から得るために購入の記録も読む（理由は「ドメイン構造」の買い物リストの項）。
@@ -434,6 +440,7 @@ DI のグラフ（`AppGraph`）は、Factory でプラットフォームが作�
 
 16-3 では、保存先から ShoppingSession を読み戻す生成関数（`ShoppingSession.of`。「集約と不変条件」）を domain に足し、Session の Repository の具象（`RoomShoppingSessionRepository`）を作った。表と保存の書き方は「データ層の方針」に書いた。
 DI のグラフに、Session の Repository の具象、`Clock`（`Clock.System`）、Session への Recipe の追加と Session の重複候補の UseCase を足した。
+購入の記録の Repository の具象（`RoomPurchaseRecordRepository`）も作り、DI のグラフに、その具象と、買い物リストを出す UseCase・購入済みにする UseCase を足した。これで、今ある UseCase はすべてグラフで組み立てられる。
 
 同じ端末で Session への追加が同時に走った場合は、今の `save`（Session をまるごと1つのトランザクションで書く）のままにした。
 2回の追加の読み書きが重なる（2回目が読むのが1回目の確定の前）と、次のようになる。
@@ -480,10 +487,6 @@ PoC は完了済み。
 
 - Repository の分け方
 - Web 版など、Android と iOS 以外の Repository の実装。Android と iOS のローカルの保存は Room 3（「技術構成」）
-- 購入の記録の Room のテーブル・主キー・インデックス（「実装の進め方」の 16-3）。Item・Recipe・ShoppingSession の表は「データ層の方針」に書いた
-- 購入の記録の保存の具象（「データ層の方針」）で、データ層の実装時に確かめること
-  - 購入の記録だけが読めない失敗が起きうるか。起きうるなら、買い物リストを出すときに全体を `Unexpected` にする扱い（「実装の進め方」の 12）を見直す
-  - 購入の記録の読み込みに、Repository の中でメモリのキャッシュを持たせるか。持たせる場合も、書き込みは保存し終えてから完了とする（裏で書くと、タスクキルで消える）
 - Recipe の写真に関する未決定事項（詳細は [photo.md](photo.md) 参照）
 - Recipe 削除機能の実装時、編集画面からの保存によって削除済み Recipe を再作成しないようにするか。現時点では決めていない。今の実装は新規作成と同一の `save` メソッドで上書き保存する構成となっている。あわせて、Session から元の Recipe へ遷移しようとしたときに Recipe が削除されていた場合の見せ方も決める
 - Item の削除を設けるとき、rename が削除済みの Item を作り直さないようにする。`RenameItemUseCase` は、変える Item を読んでから保存するまでをトランザクションで包んでおらず、保存（`ItemRepository.save`）は同じ ID の Item が無ければ作る。そのため、間に削除が入ると、削除した Item が rename で戻る。Recipe の編集は、読んでから保存するまでを `TransactionRunner` の中で行うので、間に削除は入らない。rename も1つのトランザクションにするか、rename の保存を「上書きだけ（無ければ失敗）」にするかを、削除を作るときに決める

@@ -126,6 +126,19 @@ class RoomShoppingSessionRepositoryTest {
     }
 
     @Test
+    fun 購入の記録があるSessionを保存し直しても購入の記録は残る() = runTestWithRecipeDeckDatabase { database ->
+        val repository = RoomShoppingSessionRepository(database)
+        val purchaseRecordRepository = RoomPurchaseRecordRepository(database)
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu()
+        repository.save(session)
+        val purchased = session.recipes.single().ingredients.map { it.id }.toSet()
+        purchaseRecordRepository.record(session.id, purchased, isPurchased = true)
+
+        assertEquals(Outcome.Success(Unit), repository.save(session.withAddedFriedRice()))
+        assertEquals(Outcome.Success(purchased), purchaseRecordRepository.findPurchasedSourceIds(session.id))
+    }
+
+    @Test
     fun 保存しても別のSessionの中身は変わらない() = runTestWithRecipeDeckDatabase { database ->
         val repository = RoomShoppingSessionRepository(database)
         val dao = database.shoppingSessionDao()

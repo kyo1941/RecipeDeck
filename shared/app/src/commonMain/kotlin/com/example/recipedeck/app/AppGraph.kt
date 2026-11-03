@@ -6,10 +6,12 @@ import com.example.recipedeck.data.RoomTransactionRunner
 import com.example.recipedeck.data.buildRecipeDeckDatabase
 import com.example.recipedeck.data.item.RoomItemRepository
 import com.example.recipedeck.data.recipe.RoomRecipeRepository
+import com.example.recipedeck.data.shopping.RoomPurchaseRecordRepository
 import com.example.recipedeck.data.shopping.RoomShoppingSessionRepository
 import com.example.recipedeck.domain.TransactionRunner
 import com.example.recipedeck.domain.item.ItemRepository
 import com.example.recipedeck.domain.recipe.RecipeRepository
+import com.example.recipedeck.domain.shopping.PurchaseRecordRepository
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepository
 import com.example.recipedeck.usecase.item.CreateItemUseCase
 import com.example.recipedeck.usecase.item.DuplicateCandidateFinder
@@ -20,6 +22,8 @@ import com.example.recipedeck.usecase.recipe.CreateRecipeUseCase
 import com.example.recipedeck.usecase.recipe.EditRecipeUseCase
 import com.example.recipedeck.usecase.shopping.AddRecipeToShoppingSessionUseCase
 import com.example.recipedeck.usecase.shopping.FindSessionDuplicateCandidatesUseCase
+import com.example.recipedeck.usecase.shopping.MarkShoppingListItemPurchasedUseCase
+import com.example.recipedeck.usecase.shopping.ShowShoppingListUseCase
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.Provides
@@ -36,6 +40,8 @@ interface AppGraph {
     val editRecipeUseCase: EditRecipeUseCase
     val addRecipeToShoppingSessionUseCase: AddRecipeToShoppingSessionUseCase
     val findSessionDuplicateCandidatesUseCase: FindSessionDuplicateCandidatesUseCase
+    val showShoppingListUseCase: ShowShoppingListUseCase
+    val markShoppingListItemPurchasedUseCase: MarkShoppingListItemPurchasedUseCase
 
     @DependencyGraph.Factory
     fun interface Factory {
@@ -59,6 +65,10 @@ interface AppGraph {
     @Provides
     fun provideShoppingSessionRepository(database: RecipeDeckDatabase): ShoppingSessionRepository =
         RoomShoppingSessionRepository(database)
+
+    @Provides
+    fun providePurchaseRecordRepository(database: RecipeDeckDatabase): PurchaseRecordRepository =
+        RoomPurchaseRecordRepository(database)
 
     @Provides
     fun provideClock(): Clock = Clock.System
@@ -114,4 +124,16 @@ interface AppGraph {
     fun provideFindSessionDuplicateCandidatesUseCase(
         duplicateCandidateFinder: DuplicateCandidateFinder,
     ): FindSessionDuplicateCandidatesUseCase = FindSessionDuplicateCandidatesUseCase(duplicateCandidateFinder)
+
+    @Provides
+    fun provideShowShoppingListUseCase(
+        shoppingSessionRepository: ShoppingSessionRepository,
+        purchaseRecordRepository: PurchaseRecordRepository,
+    ): ShowShoppingListUseCase = ShowShoppingListUseCase(shoppingSessionRepository, purchaseRecordRepository)
+
+    @Provides
+    fun provideMarkShoppingListItemPurchasedUseCase(
+        shoppingSessionRepository: ShoppingSessionRepository,
+        purchaseRecordRepository: PurchaseRecordRepository,
+    ): MarkShoppingListItemPurchasedUseCase = MarkShoppingListItemPurchasedUseCase(shoppingSessionRepository, purchaseRecordRepository)
 }

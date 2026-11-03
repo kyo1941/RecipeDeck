@@ -12,6 +12,8 @@ import com.example.recipedeck.data.item.ItemEntity
 import com.example.recipedeck.data.recipe.RecipeDao
 import com.example.recipedeck.data.recipe.RecipeEntity
 import com.example.recipedeck.data.recipe.RecipeIngredientEntity
+import com.example.recipedeck.data.shopping.PurchaseRecordDao
+import com.example.recipedeck.data.shopping.PurchaseRecordEntity
 import com.example.recipedeck.data.shopping.SessionItemEntity
 import com.example.recipedeck.data.shopping.SessionRecipeEntity
 import com.example.recipedeck.data.shopping.SessionRecipeIngredientEntity
@@ -27,6 +29,7 @@ import com.example.recipedeck.data.shopping.ShoppingSessionEntity
         SessionRecipeEntity::class,
         SessionItemEntity::class,
         SessionRecipeIngredientEntity::class,
+        PurchaseRecordEntity::class,
     ],
     version = 1,
     exportSchema = false,
@@ -36,6 +39,7 @@ abstract class RecipeDeckDatabase : RoomDatabase() {
     internal abstract fun itemDao(): ItemDao
     internal abstract fun recipeDao(): RecipeDao
     internal abstract fun shoppingSessionDao(): ShoppingSessionDao
+    internal abstract fun purchaseRecordDao(): PurchaseRecordDao
 }
 
 @Suppress("KotlinNoActualForExpect")
