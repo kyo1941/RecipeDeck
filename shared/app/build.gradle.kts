@@ -29,7 +29,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(project(":shared:ui"))
+            api(project(":shared:ui"))
             implementation(project(":shared:usecase"))
             implementation(project(":shared:data"))
             implementation(libs.compose.runtime)

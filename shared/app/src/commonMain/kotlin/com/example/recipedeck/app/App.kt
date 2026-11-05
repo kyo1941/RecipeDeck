@@ -4,6 +4,6 @@ import androidx.compose.runtime.Composable
 import com.example.recipedeck.ui.RecipeDeckApp
 
 @Composable
-fun App() {
-    RecipeDeckApp()
+fun App(appGraph: AppGraph) {
+    RecipeDeckApp(viewModels = appGraph)
 }

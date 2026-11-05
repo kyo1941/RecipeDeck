@@ -1,19 +1,22 @@
 package com.example.recipedeck.ui
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.text.BasicText
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.recipedeck.ui.shopping.ShoppingListScreen
 
 @Composable
-fun RecipeDeckApp() {
-    Box(
-        modifier = Modifier.fillMaxSize().safeDrawingPadding(),
-        contentAlignment = Alignment.Center,
-    ) {
-        BasicText("RecipeDeck")
+fun RecipeDeckApp(viewModels: ScreenViewModels) {
+    MaterialTheme {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            ShoppingListScreen(
+                viewModel = viewModel { viewModels.shoppingListViewModel },
+                modifier = Modifier.safeDrawingPadding(),
+            )
+        }
     }
 }
