@@ -1,6 +1,8 @@
 name: Claude PR Review
 
 on:
+  pull_request:
+    types: [opened, ready_for_review]
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -11,6 +13,9 @@ on:
 jobs:
   claude-review:
     if: |
+      (github.event_name == 'pull_request' &&
+       !github.event.pull_request.draft &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request &&
        contains(github.event.comment.body, '@claude')) ||
@@ -41,6 +46,8 @@ jobs:
           # 既定の GitHub App トークンは contents: write を持ち、上の permissions では制限できない。
           github_token: ${{ github.token }}
           trigger_phrase: "@claude"
+          track_progress: ${{ github.event_name == 'pull_request' }}
+          prompt: ${{ github.event_name == 'pull_request' && 'この PR をレビューしてください。' || '' }}
 
           claude_args: |
             --max-turns 20
