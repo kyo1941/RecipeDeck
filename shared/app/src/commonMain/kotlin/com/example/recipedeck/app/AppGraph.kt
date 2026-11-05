@@ -13,6 +13,8 @@ import com.example.recipedeck.domain.item.ItemRepository
 import com.example.recipedeck.domain.recipe.RecipeRepository
 import com.example.recipedeck.domain.shopping.PurchaseRecordRepository
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepository
+import com.example.recipedeck.ui.ScreenViewModels
+import com.example.recipedeck.ui.shopping.ShoppingListViewModel
 import com.example.recipedeck.usecase.item.CreateItemUseCase
 import com.example.recipedeck.usecase.item.DuplicateCandidateFinder
 import com.example.recipedeck.usecase.item.FindDuplicateCandidatesUseCase
@@ -31,7 +33,7 @@ import dev.zacsweers.metro.SingleIn
 import kotlin.time.Clock
 
 @DependencyGraph(AppScope::class)
-interface AppGraph {
+interface AppGraph : ScreenViewModels {
     val findDuplicateCandidatesUseCase: FindDuplicateCandidatesUseCase
     val searchItemsUseCase: SearchItemsUseCase
     val createItemUseCase: CreateItemUseCase
@@ -136,4 +138,8 @@ interface AppGraph {
         shoppingSessionRepository: ShoppingSessionRepository,
         purchaseRecordRepository: PurchaseRecordRepository,
     ): MarkShoppingListItemPurchasedUseCase = MarkShoppingListItemPurchasedUseCase(shoppingSessionRepository, purchaseRecordRepository)
+
+    @Provides
+    fun provideShoppingListViewModel(showShoppingListUseCase: ShowShoppingListUseCase): ShoppingListViewModel =
+        ShoppingListViewModel(showShoppingList = showShoppingListUseCase::invoke)
 }

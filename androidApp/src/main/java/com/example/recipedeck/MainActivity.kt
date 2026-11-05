@@ -10,8 +10,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val appGraph = (application as RecipeDeckApplication).appGraph
         setContent {
-            App()
+            App(appGraph)
         }
     }
 }

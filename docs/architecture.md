@@ -14,28 +14,33 @@
 - Ktor サーバーは MVP に含めない。複数端末での共有、端末の移行、重複判定のモデルをサーバーで推論する場合（[AI / ML](#ai--ml)）、データのバックアップで要る想定で、どれも MVP に必須ではないため
 - DI は Metro を使う。組み立てられない依存をコンパイルで見つけられるため。実行時に組み立てる方式では、その依存を使う画面を開くまで誤りに気づけない
   - UseCase には `@Inject` を付けず、`:shared:app` の組み立てに UseCase ごとの作り方（`@Provides`）を書く。UseCase 層を DI のライブラリに依存させないためで、外部のライブラリの例外を data で失敗型に変える（「データ層の方針」）のと同じ考えによる。作り方の書き漏れは Metro がコンパイルで見つける
+  - ViewModel にも `@Inject` を付けず、`:shared:app` に作り方（`@Provides`）を書く。DI のライブラリへの依存を `:shared:app` に集めていて、ViewModel だけをほかの場所で組み立てる理由がないため。Metro の ViewModel 用の成果物（metrox-viewmodel）は使わない。ViewModel をクラスで引くので、登録の書き漏れが実行時の例外になるためである
+- ViewModel は JetBrains の `lifecycle-viewmodel-compose` を使う
+- 画面の部品は Material 3 を使う。版は Compose Multiplatform の対応表にあるもの（今は `1.12.0-alpha03`）にする。対応表の Material 3 は alpha だが、API が変わって困るのは版を上げるときだけで、版は固定している。使っていて不具合に当たったら、別の版を検討する
 - Android と iOS のローカルの保存は Room 3（`androidx.room3`）を使う。Room 2 系（`androidx.room`）も KMP に対応しているが、Room 3 はドライバ（`SQLiteDriver`）を必須にして、Android だけの古い経路（SupportSQLite）を外した。そのため、Android と iOS で同じコードの経路を通しやすい。コードの生成には KSP を使う
   - ドライバは、Android・iOS とも、アプリに同梱する SQLite（`BundledSQLiteDriver`）を使う。OS の SQLite を使うドライバ（`AndroidSQLiteDriver`）では、Room 2 と同じく、トランザクションをスレッドに縛る Android だけの経路になり（「データ層の方針」）、SQLite の版も OS の版で変わる（minSdk 24 の端末では古い）。代わりに、アプリのサイズが同梱の SQLite の分だけ増える
 
 未確定：
 
 - Ktor Client の採否。MVP には Ktor サーバーを含めないので、サーバーと通信するようになったときに決める
-- ViewModel・画面遷移・Material 3 のライブラリ。UI（「実装の進め方」の 17）で決める。ViewModel に Metro の `@Inject` を付けるかもあわせて決める。UseCase に付けない理由（UseCase 層を DI のライブラリに依存させない）は、外側の層の ViewModel には当たらない
+- 画面遷移のライブラリ。17-2（「実装の進め方」の 17）で、画面の行き来の形とあわせて決める。候補は Navigation 2 と Navigation 3
 
 ## モジュール構成
 
 | モジュール | 内容 |
 |---|---|
-| `:androidApp` | Android アプリの入口。`MainActivity` だけを置き、`:shared:app` の画面を表示する |
+| `:androidApp` | Android アプリの入口。`MainActivity` と、グラフを持つ `RecipeDeckApplication` を置き、`:shared:app` の画面を表示する |
 | `:shared:domain` | ドメイン層の KMP モジュール。ターゲットは JVM・iosArm64・iosSimulatorArm64。パッケージは `amount` / `item` / `recipe` / `shopping`。Repository の interface もここに置く |
 | `:shared:usecase` | UseCase の KMP モジュール。`:shared:domain` に依存し、ターゲットも同じ。パッケージは `ingredient` / `item` / `recipe` / `shopping`。`ingredient` には、Recipe と Session の両方で使う材料の入力を置く |
 | `:shared:data` | データ層の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:domain` に依存し、Repository と `TransactionRunner` の具象、製品のデータベースの作り方を置く。Room は `api` で公開する（下の段落） |
-| `:shared:ui` | 画面の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:usecase` に依存する。今は仮の画面だけを置く |
+| `:shared:ui` | 画面の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:usecase` に依存し、画面と ViewModel を置く |
 | `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui`・`:shared:usecase`・`:shared:data` に依存し、DI の組み立てを持つ。アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
 | `iosApp` | iOS アプリの入口。Gradle のモジュールではなく Xcode のプロジェクトで、`:shared:app` の framework を組み込み、その画面を表示する |
 
 DI の組み立てを `:shared:ui` ではなく `:shared:app` に置くのは、データ層の具象（`:shared:data`）を組み立てる側が知る必要があるためである。`:shared:ui` に置くと、画面や ViewModel のコードからもデータ層の具象が見えてしまう。分ければ、`:shared:ui` は `:shared:usecase` にしか依存しないので、UI からデータ層の具象を使うとビルドが落ちる。
 `:shared:data` は Room を `api` で公開する。`:shared:app` の DI の組み立てが、データベース（`RecipeDeckDatabase`。Room の `RoomDatabase` を継ぐ）とその作り方（`RoomDatabase.Builder`）を扱うためである。`:shared:ui` は `:shared:data` に依存しないので、画面のコードから Room は見えない。表の形（Entity）と DAO は `:shared:data` の `internal` にして、外に出さない。
+`:shared:app` は `:shared:ui` を `api` で公開する。`AppGraph` が `:shared:ui` の `ScreenViewModels` を継ぐので、`AppGraph` を持つ `:androidApp` にも親の型が見える必要があるためである。
+`:shared:ui` は lifecycle の ViewModel を `api` で公開する。`:shared:app` が ViewModel を組み立てるときに、親の `ViewModel` が見える必要があるためである。
 
 `:shared:domain` と `:shared:usecase` は Android の API を使わないので、Android のターゲットを持たない。Android のターゲットを持つモジュール（`:shared:ui` など）からは、JVM のターゲットの成果物を使う。
 `:shared:data` は、Android でデータベースの置き場所を決めるのに Android の API（`Context`）を使うので、Android のターゲットを持つ。JVM のターゲットは持たない。アプリが動くのは Android と iOS だけで、Room の JVM の経路は iOS と同じコードなので、テストは iOS シミュレータで流せば足りるためである。iOS シミュレータでのテストが遅くて困ったときに、JVM のターゲットを足す。
@@ -190,7 +195,7 @@ erDiagram
 - 操作（アクション）ごとに1クラスを定義し、単一の `suspend operator fun invoke` を持たせる。画面構成の変更が UseCase に波及しないよう、画面単位でのクラス設計は行わない
 - ViewModel の `viewModelScope` から呼び出す。CMP では iOS も共通コード上の ViewModel から呼び出すため、Android と同様の設計となる
 - UseCase 内部ではディスパッチャ（スレッド）の切り替えを行わない。必要であれば Repository の実装側で切り替える
-- 結果は UseCase ごとの sealed interface で返却する。ViewModel は例外を catch せず、結果を UiState に変換するだけにとどめる（変換の層を ViewModel との間に挟むかは未確定事項）
+- 結果は UseCase ごとの sealed interface で返却する。ViewModel は例外を catch せず、結果を UiState に変換するだけにとどめる（「UI の方針」）
   - 成功と失敗で階層を入れ子にせず、操作の結果として起きたことごとの型を、単一の sealed interface 直下に並べる（`Saved`・`NameRequired`・`RecipeNoLongerExists` など）。Repository の失敗は技術的要因による分類であり、UseCase の結果は操作として何が起きたかで分類するため、結果を `Outcome` ではラップしない
   - 型名は状況を表すものとし、画面側の振る舞いを指示する名前（`ShowNameError` など）にはしない。画面構成が変更されても UseCase に影響を与えないよう、結果に応じて何を行うかは ViewModel 側が決定する
   - UseCase が理由ごとの結果を用意していない失敗は、`Unexpected` として原因（cause）とともに返却する。個別の理由を持つ結果と区別できるよう、汎用の受け皿であることが名称から明確に伝わる命名とする
@@ -257,6 +262,20 @@ erDiagram
 - 検索の部分一致は、SQL の `instr(display_name, ?) > 0` で書く。`LIKE` は英字の大文字・小文字を区別せず、`%` と `_` を記号として扱うので使わない。並びは spec の規則（完全一致、前方一致、それ以外の部分一致の順。同じ順の中では表示名の短いものを先にする）に従い、表示名の長さも同じなら作った順（`rowid`）にする。前方一致も `instr` で見る
 - 保存先から読み戻した値が規則を満たさないとき（`NotBlankString.of` が null を返す、前後に空白が付いていて `NotBlankString.of` を通すと値が変わる、など）は、data の `InvalidStoredRecordException` を投げ、Repository の失敗（`Unexpected`）にする。呼び出し側が個別に対処できることがないためである。一覧を読むときは、1件でも不正なら一覧全体を失敗にする
 - Repository の具象のテストは、製品の `RecipeDeckDatabase` をメモリ上に作って流す。確かめるのは SQL と SQLite の振る舞い（一意制約、`ON CONFLICT`、`instr`、並び）なので、Fake ではなく本物の Room と SQLite を使う。メモリ上に作るのは、テストごとにファイルを消して作り直さずに済むためである。`TransactionRunner` の中から Repository を呼ぶテスト（`RoomRecipeRepositoryTransactionTest`）だけは、`TransactionRunner` のテストと同じ理由で、ファイルに置く
+
+## UI の方針
+
+- ViewModel は画面の状態（UiState）を `StateFlow` で1つ公開し、`viewModelScope` から UseCase を呼ぶ
+- UseCase の結果を UiState に変えるのは ViewModel で、間に層を挟まない。別の層が要るのは、同じ変換をプラットフォームごとに別々の ViewModel へ渡す場面だが、Compose Multiplatform では ViewModel が共通なので、その場面はない。どう使うかは画面ごとの責務なので、結果への反応を1か所にまとめない
+  - 変換は、ViewModel の状態を読まず、UseCase の結果と入力だけから UiState を作る関数にする。同じ変換が複数の画面で要るようになったら、ViewModel の外へ移す。移しても UseCase と画面は変わらない
+  - 複数の画面で使う表示の処理（分量を文字にするなど）は、`:shared:ui` の関数にする
+- ViewModel は UseCase を関数型（`suspend () -> ShowShoppingListResult`）で受け取る。`:shared:app` が UseCase の `invoke` を渡し、テストは結果を返すラムダを渡す。UseCase は `invoke` を1つだけ持つので、関数型はその形をそのまま書いた口になる
+  - UseCase に interface を設ける形に移すのは、次の場面が出たときとする。同じ型の引数の取り違えが問題になる（関数型では呼ぶときに引数の名前を使えない。今は `EditRecipeUseCase` の `name` と `memo` だけで、ViewModel のテストで確かめる）、本番で UseCase の実装を差し替える。移すときに変わるのは、ViewModel のコンストラクタの型と `:shared:app` の渡し方だけである
+- 画面が ViewModel を受け取る口は、`:shared:ui` の `ScreenViewModels` に置き、`AppGraph` が継ぐ。`:shared:ui` からグラフは見えないためである（「モジュール構成」）。画面は `viewModel { viewModels.… }` で受けるので、ViewModel を作るのはストアに無いときだけになる。Android の画面の回転でも作り直されない
+- グラフはプロセスに1つにする。Activity の中で作ると、画面の回転で2つ目のグラフとデータベースができ、生き残った ViewModel は古い方を使い続ける。Android は `RecipeDeckApplication` で持ち、iOS は `:shared:app` の `iosMain` のトップレベルで持つ
+- 自動テストは ViewModel だけに置く。どの結果を返すかをテストケースが選び、UiState を確かめる。本物の UseCase は動かさない。UseCase の規則は UseCase のテストで確かめ、ViewModel の責務と混ぜないためである。`:shared:ui` に JVM のターゲットはなく、共通のコードで OS の違いもないので、iOS シミュレータで流す
+- 画面は UiState を描くだけにして、守る約束は ViewModel に置く。画面の見た目と操作は、PR ごとに両 OS で確かめ、実装した範囲のスクリーンショットを PR に貼る（スクリーンショットテストと動作テストは未確定事項）
+- 各段では情報と操作の有無、状態の区別までを作り、色・文字の階層・余白は 17-8 でまとめて決める。色と文字の大きさは画面に直書きせず、テーマの値を使う
 
 ## 実装の進め方
 
@@ -329,7 +348,7 @@ Session か購入の記録が読めないとき、購入の記録に書けない
 
 どちらも判定を `DuplicateCandidateFinder` に任せる。空白だけの入力なら判定せずに空の一覧を返し、判定に失敗したら `Unexpected` を返す。
 保存の UseCase（Item の作成、Recipe の作成・編集、Session への Recipe の追加）は変えていない。Item の候補を選べば今の入力（`ItemInput.Selected`）で渡せ、候補を選ばずに保存したときは今までどおり完全一致で既存の Item を使うためである。
-ただし、Session の品目を選んだことは今の入力で表せない。追加の画面を作るときに、`SessionIngredientInput` に Session の品目を選んだこと（品目の ID）を足し、UseCase は進行中の Session からその品目を引いて、表示名と Item へのつながりの組をそのまま `withAddedRecipe` に渡す（品目がもうなければ、選んだ Item がないときと同じく材料の位置を返す）。
+ただし、Session の品目を選んだことは今の入力で表せない。重複候補の判定の具象（AI）を入れるときに、`SessionIngredientInput` に Session の品目を選んだこと（品目の ID）を足し、UseCase は進行中の Session からその品目を引いて、表示名と Item へのつながりの組をそのまま `withAddedRecipe` に渡す（品目がもうなければ、選んだ Item がないときと同じく材料の位置を返す）。
 足すまでは、Session の品目を選んでも、名前を打った材料（`ItemInput.Typed`）として渡すしかない。これは足すまでの回避策で、正式な渡し方ではない。
 Session 限定の品目は、同じ表示名の Item がない限りそれで同じ品目に入る（同じ表示名の Item があれば、候補には Item が出る）。Item につながる品目のうち表示名が今の Item と違うもの（Item の rename の後など）は、別の品目になる。
 
@@ -402,7 +421,7 @@ UI を作るときに足す UseCase（今は無い）：
 
 UI を作るときに守ること（16-2・16-3 で出たもの）：
 
-- 保存の UseCase が `Unexpected` を返したら、入力を消さずに残し、保存をやり直せるようにする。データベースを開けない・書けないといった失敗は、アプリを落とさず `Unexpected` で返り、書きかけた分はトランザクションで取り消される（「データ層の方針」）。やり直しても、Item や Recipe が中途半端に残ることはない
+- 保存の UseCase が `Unexpected` を返したら、入力を消さずに残し、保存をやり直せるようにする。データベースを開けない・書けないといった失敗は、アプリを落とさず `Unexpected` で返り、書きかけた分はトランザクションで取り消される（「データ層の方針」）。例外は、iOS の初回の起動で保存先のフォルダを作れないときだけである（下の 16-2）。やり直しても、Item や Recipe が中途半端に残ることはない
 - 保存の重複タップを、UI のコンポーネントで防げるなら防ぐ。防げずに同じ表示名の Item が同時に作られても、一意制約で失敗して `Unexpected` になる（「集約と不変条件」）
 - Session への Recipe の追加の連打も、UI で防ぐ。同じ Recipe を2回追加するのは正しい操作（[spec.md](spec.md#shoppingsession)）なので、データ層や UseCase には誤りか意図かを見分けられない。誤って2つ入った Session 内の Recipe は、外す操作がまだないので戻せない
 
@@ -431,11 +450,12 @@ Kotlin を 2.4.21 に上げ、Kotlin 2.2 のために置いていた制約（kot
 
 Item と Recipe の Repository の具象（`RoomItemRepository`・`RoomRecipeRepository`）を作り、Android と iOS の両方でテストで確かめた。表と保存の書き方は「データ層の方針」に書いた。
 
-DI のグラフ（`AppGraph`）は、Factory でプラットフォームが作ったデータベースの作り方（`RoomDatabase.Builder`）を受け取り、ドライバを決めてデータベースを1つだけ作る（`buildRecipeDeckDatabase`。ドライバは `:shared:data` の中で決める）。そのデータベースで Item と Recipe の Repository と `TransactionRunner` の具象を作り、Item と Recipe だけで動く UseCase（検索・作成・rename、Recipe の作成・編集）を組み立てる。Session も使う UseCase は 16-3 で足す。グラフを実行時に作るのは 17 のままで、今は Metro のコンパイル時の検証だけで組み立てを確かめている。
+DI のグラフ（`AppGraph`）は、Factory でプラットフォームが作ったデータベースの作り方（`RoomDatabase.Builder`）を受け取り、ドライバを決めてデータベースを1つだけ作る（`buildRecipeDeckDatabase`。ドライバは `:shared:data` の中で決める）。そのデータベースで Item と Recipe の Repository と `TransactionRunner` の具象を作り、Item と Recipe だけで動く UseCase（検索・作成・rename、Recipe の作成・編集）を組み立てる。Session も使う UseCase は 16-3 で足す。
 
-- データベースの作り方は、置き場所がプラットフォームで違うので、`:shared:data` の `androidMain`・`iosMain` に1つずつ置く（`recipeDeckDatabaseBuilder`）。グラフの外から渡すのは、Android では作るのに `Context` が要り、共通のコードのグラフでは作れないためである。17 では、Android は `:androidApp` が `Context` を渡して作り、iOS は `:shared:app` の `iosMain` が作って、グラフの Factory に渡す
+- データベースの作り方は、置き場所がプラットフォームで違うので、`:shared:data` の `androidMain`・`iosMain` に1つずつ置く（`recipeDeckDatabaseBuilder`）。グラフの外から渡すのは、Android では作るのに `Context` が要り、共通のコードのグラフでは作れないためである。プラットフォームの事情はそのソースセットに置く。Android は `:shared:app` の `androidMain` が `:androidApp` から `Context` を受けて作り、iOS は `:shared:app` の `iosMain` が作って、グラフの Factory に渡す。`:androidApp` は `:shared:data` に依存せず、Room を扱わない
 - Android は、ファイル名を渡すと Room がアプリのデータベースのフォルダ（`Context.getDatabasePath`）に置く
 - iOS は、Application Support のフォルダに置く。Documents のフォルダは、ユーザーが作った書類を置く場所で、設定によってはファイルのアプリからユーザーに見えるためである。どちらも iCloud のバックアップの対象になる
+  - このフォルダはインストールの直後には無く、最初の起動で作る。作れないと `recipeDeckDatabaseBuilder` が例外を投げ、グラフを作る前なのでアプリが落ちる。専用の経路は作らず、クラッシュとして受け入れる。起きるのは、初回の起動で容量がほぼ完全に尽きているときだけで、落ちなくてもアプリは使えないためである。フォルダがあれば作らないので、2回目以降の起動では起きず、データベースを開けない失敗は `Unexpected` になる（シミュレータと容量の小さいボリュームで確かめた。実機では確かめていない）
 - クエリを動かすコルーチンは、Room の既定（Android・iOS とも `Dispatchers.IO`。room3-runtime 3.0.3）のままにする
 
 16-3 では、保存先から ShoppingSession を読み戻す生成関数（`ShoppingSession.of`。「集約と不変条件」）を domain に足し、Session の Repository の具象（`RoomShoppingSessionRepository`）を作った。表と保存の書き方は「データ層の方針」に書いた。
@@ -451,6 +471,24 @@ DI のグラフに、Session の Repository の具象、`Clock`（`Clock.System`
 重なるのは、ほぼ同時の誤連打だけと見ている。誤連打なら、どちらの場合も1回分が残るので困らない。違う入力の2回の追加が重なるほど速い操作は人にはできない、という前提を採る。1回の処理にかかる時間は測っていないので、端末が重いときなどに違う入力の追加が重なりうると分かったら、見直す。
 重ならない2回は、それぞれの追加がそのまま反映されるだけである。誤連打で同じ Recipe が2回分入るのを防ぐのは UI で、データ層ではない（上の「UI を作るときに守ること」）。
 読みから書きまでを Repository の中で1つのトランザクションにする形（Repository に変え方を渡す）は、違う変更が同時に走る経路（裏で書く処理、同期など）ができたときに入れる。
+
+17 は、1回に考える論点を絞るため、次のように分けて進める。前の段の画面が次の段のデータを作るので、代表フロー（[spec.md](spec.md#プロダクトの中核)）の順に作る。
+
+- 17-1：土台（ライブラリ、グラフの実行時の生成、ViewModel の形、UI のテスト方針）
+- 17-2：Recipe の一覧
+- 17-3：Recipe の作成・編集
+- 17-4：Session への Recipe の追加
+- 17-5：買い物リスト
+- 17-6：Session の完了
+- 17-7：Item 単独の画面（作成・rename）
+- 17-8：装飾
+
+Item 単独の画面を代表フローの後に置くのは、材料の入力で Item が作られるので、代表フローには要らないためである。誤字で作った Item は、17-7 までは直せない。
+重複候補の呼び出しは、この中には入れず、`DuplicateCandidateFinder` の AI の具象を入れるときに作る。今の Finder は候補を返さないので、候補の表示を画面で確かめられないためである。
+
+17-1 では、グラフを実行時に作り、両 OS でデータベースを開いて `ShowShoppingListUseCase` の結果を画面に出すところまでを作った。決めたことは「技術構成」と「UI の方針」に書いた。
+製品のデータベースに、表と進行中の Session を1件に保つトリガーが作られることを、Android のエミュレータと iOS のシミュレータで確かめた。
+買い物リストの ViewModel と画面は、17-5 で育てる。
 
 ## AI / ML
 
@@ -496,13 +534,16 @@ PoC は完了済み。
 - SessionItem の ID を残すか。1つの Session の中では SessionItem は Item へのつながりと表示名の組で一意に決まるので、行がその組で品目を指せば ID を外せる。ただし、品目の指し方が変わる操作（Session 限定の品目を Item として登録する、Item を統合する）では、ID がある方が行を書き換えずに済む。それらの操作を決めるときにあわせて見直す。候補から Session の品目を選んだことを受け取る入力（「実装の進め方」の 13）も品目の ID で指す予定なので、ID を外すなら、その入力の指し方もあわせて見直す
 - 生成関数や計算が返す null の扱い。保存先から読み戻した値が規則を満たさない場合の扱いは、「データ層の方針」に書いた。買い物リストの分量は表示で足すので、domain の買い物リストでは桁あふれは起きない（足し方を domain に移したら見直す。[spec.md](spec.md#買い物リスト表示)）
 - Session に違う変更が同時に走る経路（裏で書く処理、同期など）ができたら、Session を変える操作の読みから書きまでを、Repository の中で1つのトランザクションにする（Repository に変え方を渡す形）。今は経路がないので、Session をまるごと書く `save` のままにしている（「実装の進め方」の 16-3）。`TransactionRunner` は複数の集約をまとめるためのものなので、広げない。購入の記録は別の集約なので、対象外
-- UseCase の結果を画面向けに変換する層を設けるか（Presentation の層を挟むか、ViewModel が直接扱うか）。UI の実装時に決める
 - 別名（alias）の具体的な永続化構造
 - SAME / NOT_SAME 判定に対するフィードバックの保存形式
 - ML の判定閾値（しきい値）
 - Android プラットフォームにおける読み仮名変換の実装方式
 - iOS の最小の版（今は 18.5。「モジュール構成」）を、配る相手などを踏まえて改めて決める
 - 保存先に規則を満たさない行が見つかったときに、データを直すか。今は読み戻すときに失敗（`Unexpected`）にするだけで、直さない（「データ層の方針」）。たとえば前後に空白の付いた表示名 ` たまねぎ` は、`たまねぎ` に直せば読めるようになる。ただし、別の Item がすでに `たまねぎ` なら一意制約でぶつかり、2つの Item をまとめる話（merge）になる。まとめることは自動では行わない方針（[spec.md](spec.md#暗黙的な自動統合silent-mergeは禁止)）なので、自動で直せる範囲と、ユーザーに知らせる場合を分けて決める。急ぎではない
-- 端末の空き容量が足りずに書けない失敗を、ほかの失敗と分けてユーザーに伝えるか。今は Room の失敗はすべて `Unexpected`（汎用のエラー）になる。空き容量の不足は、ユーザーが空き容量を作れば直る失敗なので、汎用のエラーでは何をすれば直るかが伝わらない。分けるなら、Repository の失敗型に種類を足し（「データ層の方針」）、受け取る UseCase の結果にも足し、画面での見せ方を決める。UI（17）で、画面の作りとあわせて決める
-- ログの仕組み。UI（17）で決める。Repository と `TransactionRunner` の具象が捕まえた例外は、`Unexpected` の中身（`cause`）として UseCase を通り、ViewModel に届く。そこで1か所で残す形にし、data では残さない。data でも残すと、同じ失敗が二重に残るためである。`RoomTransactionRunner` が捕まえたブロックの中の不具合も失敗に紛れるので（「データ層の方針」）、このログで見つける
+- 端末の空き容量が足りない失敗の扱い。書き込みだけでなく、データベースがあっても読み込みが失敗する（シミュレータと容量の小さいボリュームで確かめた）。今は Room の失敗はすべて `Unexpected`（汎用のエラー）になる。空き容量の不足は、ユーザーが空き容量を作れば直る失敗なので、汎用のエラーでは何をすれば直るかが伝わらない。簡単に見分けられるなら、汎用のエラーにせず、想定した失敗として分ける
+  - 見せ方（OS のストレージの設定へ移るボタンを置くか、ダイアログで知らせるか）を、UI の作りから先に決める。Repository の失敗型と UseCase の結果は、その見せ方に合わせて変える。17-3 で決める
+  - 見分け方について分かっていること：SQLite のドライバの例外 `androidx.sqlite.SQLiteException` はエラーコードをプロパティで持たず、メッセージ（`Error code: 13, message: database or disk is full`）にだけ持つ（sqlite 2.7.1 の `throwSQLiteException`）。見分けるにはメッセージを読むことになり、その形はライブラリの約束ではない。実際に容量が足りないときに、コード 13（`SQLITE_FULL`）以外で失敗しないか、Room が例外を包まないかは確かめていない
+- 読み込みの時機と再試行。`ShoppingListViewModel` は、ViewModel を作るときに1回だけ読む。そのため、別の画面で変更して戻っても古いままで、読み込みに失敗するとアプリを終了するまで読み直せない。読み直す形（Repository を Flow で監視する、画面に入るたびに読み直す）を、17-2 で画面遷移の形とあわせて決める。読み直す口ができれば、失敗画面の再試行はその口を呼ぶだけで作れる。読み先はローカルの SQLite だけで、ファイルの破損や不具合は再試行では直らないので、再試行を置くかはそれを踏まえて決める
+- スクリーンショットテストと、アプリを動かす動作テスト。画面と見た目が 17-8 まで動き続け、基準の画像や操作の手順を作り直すことになるので、今は作らない。いずれ整備する。それまでは、ViewModel のテストで見つけられない不具合（ボタンが ViewModel に繋がっていない、表示の崩れ、以前の画面の破損）を、PR ごとの確認と 17-6 の通しの確認で見る
+- ログの仕組み。17-3 で決める。Repository と `TransactionRunner` の具象が捕まえた例外は、`Unexpected` の中身（`cause`）として UseCase を通り、ViewModel に届く。そこで1か所で残す形にし、data では残さない。data でも残すと、同じ失敗が二重に残るためである。`RoomTransactionRunner` が捕まえたブロックの中の不具合も失敗に紛れるので（「データ層の方針」）、このログで見つける
 - Room のスキーマの書き出し（`exportSchema`）と、データベースの版の上げ方（移行）。今は版 1 で、スキーマを書き出していない。リリースまでは、表を変えても版 1 のまま変えてよい（開発中の端末では、アプリを入れ直して作り直す）。リリースの前に、スキーマを書き出してリポジトリに置くか、移行をどう書いてどう確かめるかを決める。進行中の Session を1件に保つトリガー（「データ層の方針」）は、Room のスキーマにも書き出しにも載らないので、表を作り直す移行ではトリガーも作り直し、残っていることを確かめる
