@@ -24,6 +24,11 @@ kotlin {
             implementation(project(":shared:usecase"))
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
+            api(libs.androidx.lifecycle.viewmodel.compose)
+        }
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }
