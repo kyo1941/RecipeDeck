@@ -1,0 +1,4 @@
+<resources>
+    <string name="shopping_list_no_active_session">買い物リストはまだありません</string>
+    <string name="shopping_list_load_failed">買い物リストを読み込めませんでした</string>
+</resources>

@@ -11,6 +11,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.recipedeck.ui.resources.Res
+import com.example.recipedeck.ui.resources.shopping_list_load_failed
+import com.example.recipedeck.ui.resources.shopping_list_no_active_session
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun ShoppingListScreen(viewModel: ShoppingListViewModel, modifier: Modifier = Modifier) {
@@ -18,11 +22,11 @@ fun ShoppingListScreen(viewModel: ShoppingListViewModel, modifier: Modifier = Mo
 
     when (val state = uiState) {
         ShoppingListUiState.Loading -> CenteredContent(modifier) { CircularProgressIndicator() }
-        ShoppingListUiState.NoActiveSession -> CenteredContent(modifier) { Text("買い物リストはまだありません") }
+        ShoppingListUiState.NoActiveSession -> CenteredContent(modifier) { Text(stringResource(Res.string.shopping_list_no_active_session)) }
         is ShoppingListUiState.Shown -> LazyColumn(modifier.fillMaxSize()) {
             items(state.itemNames) { itemName -> Text(itemName) }
         }
-        ShoppingListUiState.LoadFailed -> CenteredContent(modifier) { Text("買い物リストを読み込めませんでした") }
+        ShoppingListUiState.LoadFailed -> CenteredContent(modifier) { Text(stringResource(Res.string.shopping_list_load_failed)) }
     }
 }
 
