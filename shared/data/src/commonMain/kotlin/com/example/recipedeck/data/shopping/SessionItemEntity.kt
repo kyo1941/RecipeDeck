@@ -9,7 +9,7 @@ import androidx.room3.PrimaryKey
 import com.example.recipedeck.data.amount.AmountColumns
 
 @Entity(
-    tableName = "session_item",
+    tableName = SessionItemEntity.TABLE_NAME,
     foreignKeys = [
         ForeignKey(
             entity = ShoppingSessionEntity::class,
@@ -28,4 +28,8 @@ internal data class SessionItemEntity(
     @ColumnInfo(name = "item_id") val itemId: String?,
     @ColumnInfo(name = "manual_source_id") val manualSourceId: String?,
     @Embedded(prefix = "manual_") val manualAmount: AmountColumns,
-)
+) {
+    companion object {
+        const val TABLE_NAME = "session_item"
+    }
+}

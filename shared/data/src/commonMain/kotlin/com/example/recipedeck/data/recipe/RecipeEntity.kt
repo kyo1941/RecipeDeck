@@ -4,11 +4,15 @@ import androidx.room3.ColumnInfo
 import androidx.room3.Entity
 import androidx.room3.PrimaryKey
 
-@Entity(tableName = "recipe")
+@Entity(tableName = RecipeEntity.TABLE_NAME)
 internal data class RecipeEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "name") val name: String,
     @ColumnInfo(name = "status") val status: String,
     @ColumnInfo(name = "photo_ref") val photoRef: String?,
     @ColumnInfo(name = "memo") val memo: String?,
-)
+) {
+    companion object {
+        const val TABLE_NAME = "recipe"
+    }
+}

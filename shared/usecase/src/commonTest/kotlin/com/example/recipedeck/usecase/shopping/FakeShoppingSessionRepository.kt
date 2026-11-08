@@ -5,6 +5,8 @@ import com.example.recipedeck.domain.shopping.SessionState
 import com.example.recipedeck.domain.shopping.ShoppingSession
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepository
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepositoryFailure
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 class FakeShoppingSessionRepository : ShoppingSessionRepository {
     val savedSessions = mutableListOf<ShoppingSession>()
@@ -20,5 +22,9 @@ class FakeShoppingSessionRepository : ShoppingSessionRepository {
     override suspend fun findActive(): Outcome<ShoppingSession?, ShoppingSessionRepositoryFailure> {
         findFailure?.let { return Outcome.Failure(it) }
         return Outcome.Success(savedSessions.lastOrNull { it.state == SessionState.Active })
+    }
+
+    override fun observeActive(): Flow<Outcome<ShoppingSession?, ShoppingSessionRepositoryFailure>> = flow {
+        emit(findActive())
     }
 }

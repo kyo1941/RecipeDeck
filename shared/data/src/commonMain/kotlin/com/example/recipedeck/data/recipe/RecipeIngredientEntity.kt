@@ -9,7 +9,7 @@ import com.example.recipedeck.data.amount.AmountColumns
 import com.example.recipedeck.data.item.ItemEntity
 
 @Entity(
-    tableName = "recipe_ingredient",
+    tableName = RecipeIngredientEntity.TABLE_NAME,
     primaryKeys = ["recipe_id", "position"],
     foreignKeys = [
         ForeignKey(
@@ -32,4 +32,8 @@ internal data class RecipeIngredientEntity(
     @ColumnInfo(name = "position") val position: Int,
     @ColumnInfo(name = "item_id") val itemId: String,
     @Embedded val amount: AmountColumns,
-)
+) {
+    companion object {
+        const val TABLE_NAME = "recipe_ingredient"
+    }
+}

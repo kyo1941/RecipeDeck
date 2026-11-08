@@ -3,23 +3,106 @@ package com.example.recipedeck.data.recipe
 import com.example.recipedeck.data.RecipeDeckDatabase
 import com.example.recipedeck.data.amount.AmountColumns
 import com.example.recipedeck.data.item.RoomItemRepository
+import com.example.recipedeck.data.observedValues
 import com.example.recipedeck.data.runTestWithRecipeDeckDatabase
+import com.example.recipedeck.data.writeSql
 import com.example.recipedeck.domain.Outcome
 import com.example.recipedeck.domain.amount.AmountUnit
 import com.example.recipedeck.domain.amount.QuantityNotation
 import com.example.recipedeck.domain.item.ItemId
+import com.example.recipedeck.domain.recipe.Recipe
 import com.example.recipedeck.domain.recipe.RecipeId
 import com.example.recipedeck.domain.recipe.RecipeIngredient
 import com.example.recipedeck.domain.recipe.RecipeRepositoryFailure
 import com.example.recipedeck.domain.recipe.RecipeStatus
+import kotlinx.collections.immutable.ImmutableSet
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class RoomRecipeRepositoryTest {
     private suspend fun saveItems(database: RecipeDeckDatabase) {
         val itemRepository = RoomItemRepository(database)
         listOf(onion, pork, salt).forEach { itemRepository.save(it) }
+    }
+
+    private fun Outcome<ImmutableSet<Recipe>, RecipeRepositoryFailure>.recipesOrFail(): Set<Recipe> =
+        assertIs<Outcome.Success<ImmutableSet<Recipe>>>(this).value
+
+    @Test
+    fun 一覧の監視は今のRecipeを材料も含めて全件流す() = runTestWithRecipeDeckDatabase { database ->
+        saveItems(database)
+        val repository = RoomRecipeRepository(database)
+        val gingerPork = recipe(
+            id = "recipe-1",
+            name = "生姜焼き",
+            ingredients = listOf(
+                RecipeIngredient(pork.id, amountOrFail(200, 1, QuantityNotation.DECIMAL, AmountUnit.GRAM)),
+                RecipeIngredient(onion.id, null),
+            ),
+        )
+        val salad = recipe(id = "recipe-2", name = "サラダ", status = RecipeStatus.DRAFT, ingredients = listOf(RecipeIngredient(onion.id, null)))
+        val withoutIngredients = recipe(id = "recipe-3", name = "白ごはん")
+        listOf(gingerPork, salad, withoutIngredients).forEach { repository.save(it) }
+
+        assertEquals(setOf(gingerPork, salad, withoutIngredients), observedValues(repository.observeAll()).receive().recipesOrFail())
+    }
+
+    @Test
+    fun 一覧の監視は材料を並び順で組み立てる() = runTestWithRecipeDeckDatabase { database ->
+        saveItems(database)
+        val dao = database.recipeDao()
+        dao.saveRecipe("recipe-1", "生姜焼き", "ready", null, null)
+        val noAmount = AmountColumns(null, null, null, null)
+        dao.insertIngredients(
+            listOf(
+                RecipeIngredientEntity("recipe-1", 1, onion.id.value, noAmount),
+                RecipeIngredientEntity("recipe-1", 0, pork.id.value, noAmount),
+            ),
+        )
+
+        val expected = recipe(id = "recipe-1", ingredients = listOf(RecipeIngredient(pork.id, null), RecipeIngredient(onion.id, null)))
+        assertEquals(setOf(expected), observedValues(RoomRecipeRepository(database).observeAll()).receive().recipesOrFail())
+    }
+
+    @Test
+    fun 一覧の監視は材料の表だけが変わっても流し直す() = runTestWithRecipeDeckDatabase { database ->
+        saveItems(database)
+        val repository = RoomRecipeRepository(database)
+        repository.save(recipe(id = "recipe-1", ingredients = listOf(RecipeIngredient(pork.id, amountOrFail(200, 1, QuantityNotation.DECIMAL, AmountUnit.GRAM)))))
+        val values = observedValues(repository.observeAll())
+        values.receive()
+
+        database.writeSql("UPDATE recipe_ingredient SET quantity_numerator = 300 WHERE recipe_id = 'recipe-1'")
+
+        val expected = recipe(id = "recipe-1", ingredients = listOf(RecipeIngredient(pork.id, amountOrFail(300, 1, QuantityNotation.DECIMAL, AmountUnit.GRAM))))
+        assertEquals(setOf(expected), values.receive().recipesOrFail())
+    }
+
+    @Test
+    fun 一覧の監視は読み戻しに失敗しても閉じず次の変更で流し直す() = runTestWithRecipeDeckDatabase { database ->
+        val repository = RoomRecipeRepository(database)
+        val saved = recipe(id = "recipe-1", name = "生姜焼き")
+        repository.save(saved)
+        val values = observedValues(repository.observeAll())
+        values.receive()
+
+        database.writeSql("UPDATE recipe SET name = ' ' WHERE id = 'recipe-1'")
+        assertIs<Outcome.Failure<RecipeRepositoryFailure.Unexpected>>(values.receive())
+
+        database.writeSql("UPDATE recipe SET name = '生姜焼き' WHERE id = 'recipe-1'")
+        assertEquals(setOf(saved), values.receive().recipesOrFail())
+    }
+
+    @Test
+    fun データベースが閉じていると一覧の監視は失敗を流して終わる() = runTestWithRecipeDeckDatabase { database ->
+        database.close()
+
+        val values = observedValues(RoomRecipeRepository(database).observeAll())
+
+        assertIs<Outcome.Failure<RecipeRepositoryFailure.Unexpected>>(values.receive())
+        assertTrue(values.receiveCatching().isClosed)
     }
 
     @Test

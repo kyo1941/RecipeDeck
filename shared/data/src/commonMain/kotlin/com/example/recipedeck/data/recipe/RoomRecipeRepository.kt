@@ -3,6 +3,7 @@ package com.example.recipedeck.data.recipe
 import androidx.room3.withReadTransaction
 import androidx.room3.withWriteTransaction
 import com.example.recipedeck.data.RecipeDeckDatabase
+import com.example.recipedeck.data.observeOutcomeOf
 import com.example.recipedeck.data.outcomeOf
 import com.example.recipedeck.data.storedEnumOf
 import com.example.recipedeck.data.storedNotBlankStringOf
@@ -16,7 +17,10 @@ import com.example.recipedeck.domain.recipe.RecipeIngredient
 import com.example.recipedeck.domain.recipe.RecipeRepository
 import com.example.recipedeck.domain.recipe.RecipeRepositoryFailure
 import com.example.recipedeck.domain.recipe.RecipeStatus
+import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableSet
+import kotlinx.coroutines.flow.Flow
 
 class RoomRecipeRepository(private val database: RecipeDeckDatabase) : RecipeRepository {
     private val dao = database.recipeDao()
@@ -49,6 +53,18 @@ class RoomRecipeRepository(private val database: RecipeDeckDatabase) : RecipeRep
         outcomeOf(RecipeRepositoryFailure::Unexpected) {
             database.withReadTransaction {
                 dao.findById(id.value)?.toRecipe(dao.findIngredients(id.value))
+            }
+        }
+
+    override fun observeAll(): Flow<Outcome<ImmutableSet<Recipe>, RecipeRepositoryFailure>> =
+        database.observeOutcomeOf(
+            RecipeEntity.TABLE_NAME,
+            RecipeIngredientEntity.TABLE_NAME,
+            toFailure = RecipeRepositoryFailure::Unexpected,
+        ) {
+            database.withReadTransaction {
+                val ingredientsByRecipeId = dao.findAllIngredients().groupBy { it.recipeId }
+                dao.findAll().map { it.toRecipe(ingredientsByRecipeId[it.id].orEmpty()) }.toImmutableSet()
             }
         }
 }
