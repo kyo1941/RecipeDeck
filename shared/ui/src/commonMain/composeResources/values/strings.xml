@@ -1,5 +1,8 @@
 <resources>
+    <string name="load_retry">もう一度読み込む</string>
     <string name="shopping_list_no_active_session">買い物リストはまだありません</string>
     <string name="shopping_list_load_failed">買い物リストを読み込めませんでした</string>
-    <string name="shopping_list_retry">もう一度読み込む</string>
+    <string name="recipe_list_no_recipes">レシピはまだありません</string>
+    <string name="recipe_list_load_failed">レシピを読み込めませんでした</string>
+    <string name="recipe_list_draft">下書き</string>
 </resources>

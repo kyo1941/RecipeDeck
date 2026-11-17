@@ -15,9 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.recipedeck.ui.resources.Res
+import com.example.recipedeck.ui.resources.load_retry
 import com.example.recipedeck.ui.resources.shopping_list_load_failed
 import com.example.recipedeck.ui.resources.shopping_list_no_active_session
-import com.example.recipedeck.ui.resources.shopping_list_retry
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -32,7 +32,7 @@ fun ShoppingListScreen(viewModel: ShoppingListViewModel, modifier: Modifier = Mo
         }
         ShoppingListUiState.LoadFailed -> CenteredContent(modifier) {
             Text(stringResource(Res.string.shopping_list_load_failed))
-            Button(onClick = viewModel::retry) { Text(stringResource(Res.string.shopping_list_retry)) }
+            Button(onClick = viewModel::retry) { Text(stringResource(Res.string.load_retry)) }
         }
     }
 }
