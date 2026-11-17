@@ -5,21 +5,34 @@ import androidx.lifecycle.viewModelScope
 import com.example.recipedeck.usecase.shopping.ShowShoppingListResult
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.stateIn
 
 class ShoppingListViewModel(
-    showShoppingList: suspend () -> ShowShoppingListResult,
+    showShoppingList: () -> Flow<ShowShoppingListResult>,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow<ShoppingListUiState>(ShoppingListUiState.Loading)
-    val uiState: StateFlow<ShoppingListUiState> = _uiState.asStateFlow()
+    private val retryRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
-    init {
-        viewModelScope.launch {
-            _uiState.value = showShoppingList().toUiState()
-        }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<ShoppingListUiState> = retryRequests
+        .onStart { emit(Unit) }
+        .flatMapLatest { showShoppingList() }
+        .map { it.toUiState() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), ShoppingListUiState.Loading)
+
+    fun retry() {
+        retryRequests.tryEmit(Unit)
+    }
+
+    private companion object {
+        const val STOP_TIMEOUT_MILLIS = 5_000L
     }
 }
 
