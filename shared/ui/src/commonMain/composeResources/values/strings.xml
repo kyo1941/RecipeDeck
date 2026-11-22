@@ -1,4 +1,6 @@
 <resources>
+    <string name="navigation_recipes">レシピ</string>
+    <string name="navigation_shopping_list">買い物リスト</string>
     <string name="load_retry">もう一度読み込む</string>
     <string name="shopping_list_no_active_session">買い物リストはまだありません</string>
     <string name="shopping_list_load_failed">買い物リストを読み込めませんでした</string>

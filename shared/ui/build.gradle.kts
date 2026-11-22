@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -28,7 +29,13 @@ kotlin {
             implementation(libs.compose.material3)
             implementation(libs.compose.components.resources)
             implementation(libs.androidx.lifecycle.runtime.compose)
+            implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+            implementation(libs.androidx.navigation3.ui)
+            implementation(libs.kotlinx.serialization.core)
             api(libs.androidx.lifecycle.viewmodel.compose)
+        }
+        androidMain.dependencies {
+            implementation(libs.androidx.navigationevent.compose)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
