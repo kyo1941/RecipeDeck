@@ -6,6 +6,7 @@ import com.example.recipedeck.data.InvalidStoredRecordException
 import com.example.recipedeck.data.RecipeDeckDatabase
 import com.example.recipedeck.data.amount.toAmountColumns
 import com.example.recipedeck.data.amount.toAmountOrNull
+import com.example.recipedeck.data.observeOutcomeOf
 import com.example.recipedeck.data.outcomeOf
 import com.example.recipedeck.data.storedNotBlankStringOf
 import com.example.recipedeck.domain.Outcome
@@ -26,6 +27,7 @@ import com.example.recipedeck.domain.shopping.ShoppingSessionId
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepository
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepositoryFailure
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 
 class RoomShoppingSessionRepository(private val database: RecipeDeckDatabase) : ShoppingSessionRepository {
@@ -86,11 +88,21 @@ class RoomShoppingSessionRepository(private val database: RecipeDeckDatabase) : 
         }
 
     override suspend fun findActive(): Outcome<ShoppingSession?, ShoppingSessionRepositoryFailure> =
-        outcomeOf(ShoppingSessionRepositoryFailure::Unexpected) {
-            database.withReadTransaction {
-                dao.findActive()?.let { session ->
-                    session.toShoppingSession(dao.findRecipes(session.id), dao.findItems(session.id), dao.findIngredients(session.id))
-                }
+        outcomeOf(ShoppingSessionRepositoryFailure::Unexpected) { readActive() }
+
+    override fun observeActive(): Flow<Outcome<ShoppingSession?, ShoppingSessionRepositoryFailure>> =
+        database.observeOutcomeOf(
+            ShoppingSessionEntity.TABLE_NAME,
+            SessionRecipeEntity.TABLE_NAME,
+            SessionItemEntity.TABLE_NAME,
+            SessionRecipeIngredientEntity.TABLE_NAME,
+            toFailure = ShoppingSessionRepositoryFailure::Unexpected,
+        ) { readActive() }
+
+    private suspend fun readActive(): ShoppingSession? =
+        database.withReadTransaction {
+            dao.findActive()?.let { session ->
+                session.toShoppingSession(dao.findRecipes(session.id), dao.findItems(session.id), dao.findIngredients(session.id))
             }
         }
 }

@@ -1,6 +1,7 @@
 package com.example.recipedeck.data.shopping
 
 import com.example.recipedeck.data.RecipeDeckDatabase
+import com.example.recipedeck.data.observedValues
 import com.example.recipedeck.data.runTestWithRecipeDeckDatabase
 import com.example.recipedeck.domain.Outcome
 import com.example.recipedeck.domain.shopping.PurchaseRecordRepositoryFailure
@@ -26,6 +27,18 @@ class RoomPurchaseRecordRepositoryTest {
 
         assertEquals(Outcome.Success(Unit), repository.record(sessionId, setOf(greenOnion, doubanjiang), isPurchased = true))
         assertEquals(Outcome.Success(setOf(greenOnion, doubanjiang)), repository.findPurchasedSourceIds(sessionId))
+    }
+
+    @Test
+    fun 購入の記録の監視は記録すると流し直す() = runTestWithRecipeDeckDatabase { database ->
+        database.saveSession(sessionId)
+        val repository = RoomPurchaseRecordRepository(database)
+        val values = observedValues(repository.observePurchasedSourceIds(sessionId))
+        assertEquals(Outcome.Success(emptySet()), values.receive())
+
+        repository.record(sessionId, setOf(greenOnion), isPurchased = true)
+
+        assertEquals(Outcome.Success(setOf(greenOnion)), values.receive())
     }
 
     @Test

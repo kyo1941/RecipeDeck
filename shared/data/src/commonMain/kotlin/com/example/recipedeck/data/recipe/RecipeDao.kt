@@ -29,4 +29,10 @@ internal interface RecipeDao {
 
     @Query("SELECT * FROM recipe_ingredient WHERE recipe_id = :recipeId ORDER BY position")
     suspend fun findIngredients(recipeId: String): List<RecipeIngredientEntity>
+
+    @Query("SELECT * FROM recipe")
+    suspend fun findAll(): List<RecipeEntity>
+
+    @Query("SELECT * FROM recipe_ingredient ORDER BY position")
+    suspend fun findAllIngredients(): List<RecipeIngredientEntity>
 }

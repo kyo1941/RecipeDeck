@@ -3,8 +3,10 @@ package com.example.recipedeck.data.shopping
 import com.example.recipedeck.data.RecipeDeckDatabase
 import com.example.recipedeck.data.amount.AmountColumns
 import com.example.recipedeck.data.notBlankStringOrFail
+import com.example.recipedeck.data.observedValues
 import com.example.recipedeck.data.recipe.amountOrFail
 import com.example.recipedeck.data.runTestWithRecipeDeckDatabase
+import com.example.recipedeck.data.writeSql
 import com.example.recipedeck.domain.Outcome
 import com.example.recipedeck.domain.StoredAggregateRestoration
 import com.example.recipedeck.domain.amount.Amount
@@ -26,6 +28,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 @OptIn(StoredAggregateRestoration::class)
@@ -74,6 +77,44 @@ class RoomShoppingSessionRepositoryTest {
     @Test
     fun 進行中のSessionがなければnullを返す() = runTestWithRecipeDeckDatabase { database ->
         assertEquals(Outcome.Success(null), RoomShoppingSessionRepository(database).findActive())
+    }
+
+    private fun Outcome<ShoppingSession?, ShoppingSessionRepositoryFailure>.sessionOrFail(): ShoppingSession =
+        assertNotNull(assertIs<Outcome.Success<ShoppingSession?>>(this).value)
+
+    @Test
+    fun 進行中のSessionの監視はSessionの中のどの表が変わっても流し直す() = runTestWithRecipeDeckDatabase { database ->
+        val repository = RoomShoppingSessionRepository(database)
+        repository.save(ShoppingSession.create(createdAt).withAddedMapoTofu())
+        val values = observedValues(repository.observeActive())
+        values.receive()
+
+        database.writeSql("UPDATE session_recipe SET recipe_name = '麻婆茄子'")
+        assertEquals(listOf("麻婆茄子"), values.receive().sessionOrFail().recipes.map { it.recipeName.value })
+
+        database.writeSql("UPDATE session_item SET display_name = '白ネギ' WHERE display_name = '長ネギ'")
+        assertEquals(listOf("白ネギ", "豆板醤"), values.receive().sessionOrFail().items.map { it.displayName.value })
+
+        database.writeSql("UPDATE session_recipe_ingredient SET is_excluded = 1")
+        assertTrue(values.receive().sessionOrFail().recipes.single().ingredients.all { it.isExcluded })
+
+        database.writeSql("UPDATE shopping_session SET completed_at_epoch_millis = created_at_epoch_millis + 1")
+        assertEquals(Outcome.Success(null), values.receive())
+    }
+
+    @Test
+    fun 進行中のSessionの監視は読み戻しに失敗しても閉じず次の変更で流し直す() = runTestWithRecipeDeckDatabase { database ->
+        val repository = RoomShoppingSessionRepository(database)
+        val session = ShoppingSession.create(createdAt).withAddedMapoTofu()
+        repository.save(session)
+        val values = observedValues(repository.observeActive())
+        values.receive()
+
+        database.writeSql("UPDATE session_item SET display_name = ' ' WHERE display_name = '豆板醤'")
+        assertIs<Outcome.Failure<ShoppingSessionRepositoryFailure.Unexpected>>(values.receive())
+
+        database.writeSql("UPDATE session_item SET display_name = '豆板醤' WHERE display_name = ' '")
+        assertEquals(Outcome.Success(session), values.receive())
     }
 
     @Test

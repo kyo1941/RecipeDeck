@@ -7,7 +7,7 @@ import androidx.room3.Index
 import androidx.room3.PrimaryKey
 
 @Entity(
-    tableName = "session_recipe",
+    tableName = SessionRecipeEntity.TABLE_NAME,
     foreignKeys = [
         ForeignKey(
             entity = ShoppingSessionEntity::class,
@@ -26,4 +26,8 @@ internal data class SessionRecipeEntity(
     @ColumnInfo(name = "recipe_name") val recipeName: String,
     @ColumnInfo(name = "multiplier_numerator") val multiplierNumerator: Long,
     @ColumnInfo(name = "multiplier_denominator") val multiplierDenominator: Long,
-)
+) {
+    companion object {
+        const val TABLE_NAME = "session_recipe"
+    }
+}

@@ -19,11 +19,15 @@
 - 画面の部品は Material 3 を使う。版は Compose Multiplatform の対応表にあるもの（今は `1.12.0-alpha03`）にする。対応表の Material 3 は alpha だが、API が変わって困るのは版を上げるときだけで、版は固定している。使っていて不具合に当たったら、別の版を検討する
 - Android と iOS のローカルの保存は Room 3（`androidx.room3`）を使う。Room 2 系（`androidx.room`）も KMP に対応しているが、Room 3 はドライバ（`SQLiteDriver`）を必須にして、Android だけの古い経路（SupportSQLite）を外した。そのため、Android と iOS で同じコードの経路を通しやすい。コードの生成には KSP を使う
   - ドライバは、Android・iOS とも、アプリに同梱する SQLite（`BundledSQLiteDriver`）を使う。OS の SQLite を使うドライバ（`AndroidSQLiteDriver`）では、Room 2 と同じく、トランザクションをスレッドに縛る Android だけの経路になり（「データ層の方針」）、SQLite の版も OS の版で変わる（minSdk 24 の端末では古い）。代わりに、アプリのサイズが同梱の SQLite の分だけ増える
+- 画面遷移は Navigation 3（JetBrains の `navigation3-ui`）を使う。積み重ね（戻る操作で戻れる画面の並び）は、ライブラリではなくアプリが持つリストである
+  - 版は Material 3 と同じく、Compose Multiplatform の対応表にあるもの（今は `1.2.0-rc01`）にする。JetBrains 版の `1.2.0` は Compose Multiplatform 1.13.0 の対応表の版なので、Compose Multiplatform を上げるときに一緒に上げる。対応表の3列目（「Navigation3 1.2.0」）は、元にした Google 版の版で、書く版ではない
+  - 経路は1つの sealed にする。画面の書き漏れをコンパイルで見つけられ、積み重ねを保存するときに、iOS でも経路の多相の登録（`SerializersModule`）が要らないためである。登録が要るのは、`rememberNavBackStack` で `NavKey` のまま保存するときである
+  - 画面を複数のモジュールに分けるときは、経路を1つの sealed で持つ形を見直す。sealed は同じモジュールの中でしか継げないためである
+  - Compose Multiplatform は、iOS の左端のスワイプも、Android の戻る操作と同じ仕組みに流す。OS ごとに振る舞いが違う戻る操作（[画面の構成](spec.md#画面の構成)）は、共通のコードに置くと両方の OS に効くので、OS ごとのソースセットに置く
 
 未確定：
 
 - Ktor Client の採否。MVP には Ktor サーバーを含めないので、サーバーと通信するようになったときに決める
-- 画面遷移のライブラリ。17-2（「実装の進め方」の 17）で、画面の行き来の形とあわせて決める。候補は Navigation 2 と Navigation 3
 
 ## モジュール構成
 
@@ -193,6 +197,7 @@ erDiagram
 ## UseCase の方針
 
 - 操作（アクション）ごとに1クラスを定義し、単一の `suspend operator fun invoke` を持たせる。画面構成の変更が UseCase に波及しないよう、画面単位でのクラス設計は行わない
+  - 表示し続ける読み出し（Recipe の一覧、買い物リスト）は、`suspend` にせず、結果の `Flow` を返す `operator fun invoke` にする。保存されるたびに新しい結果を流し、画面は読み直しを指示しない（「UI の方針」）
 - ViewModel の `viewModelScope` から呼び出す。CMP では iOS も共通コード上の ViewModel から呼び出すため、Android と同様の設計となる
 - UseCase 内部ではディスパッチャ（スレッド）の切り替えを行わない。必要であれば Repository の実装側で切り替える
 - 結果は UseCase ごとの sealed interface で返却する。ViewModel は例外を catch せず、結果を UiState に変換するだけにとどめる（「UI の方針」）
@@ -226,6 +231,10 @@ erDiagram
 - データ層の実装では、利用する外部ライブラリから送出される例外を捕捉し、このドメイン失敗型にマッピングして返却する。これにより、UseCase 層が特定のライブラリに依存することを防ぐ
 - データ層の実装では、コルーチンの `CancellationException` を失敗型でラップせず、そのまま再送出（throw）する。失敗型にラップしてしまうと、全 UseCase 側でキャンセルの有無を個別に識別しなければならなくなるためである
 - この2つ（外部のライブラリの例外を失敗型にする、`CancellationException` を投げ直す）は、`:shared:data` の中の `outcomeOf` の1か所にまとめ、Repository と `TransactionRunner` の具象はそれを通す。domain に置かないのは、例外を捕まえて失敗型にするのがデータ層の仕事で、domain に依存する UseCase から使えないようにするためである
+- 表示し続ける読み出しのために、Repository に監視の口（`observeAll` など）を置き、`Flow<Outcome<…>>` を返す。1回だけ読む `suspend` の口は、保存の前に読む UseCase などのために残す
+  - `:shared:domain` は kotlinx-coroutines-core に依存するが、使うのは Repository の interface の型（`Flow`）だけにする。dispatcher の切り替えなどは data の具象に閉じる
+  - 読み出しの失敗では、監視を閉じない。表の変更を受けて読むたびに `outcomeOf` で包み、失敗も値として流す
+  - Recipe の一覧の口は、並びを約束しない。並べ替えは ViewModel の変換で行う。一覧が大きくなってページングを入れるときに、並べ替えを SQL に移す
 - 購入の記録は、Session と同じデータベースの別テーブルに置く。購入の記録は Session と寿命を共にし（集約は別で、Session の ID で結び付く）、削除やトランザクションを Session と一緒に扱えるため。Session も購入の記録も Room に置く（「技術構成」）。DataStore は採らない。保存先が2つに分かれて Session と同じトランザクションに入れられず、チェック程度の書き込み頻度では読み書きの軽さも利点にならないため。Session を Room 以外に置くことになったら、この評価をやり直す
 - `TransactionRunner` の具象（`:shared:data` の `RoomTransactionRunner`）は、Room の `withWriteTransaction`（`useWriterConnection { it.withTransaction(IMMEDIATE) { … } }`）で包み、`TransactionScope.rollback` を Room の `TransactionScope.rollback` へ渡す。その中で Repository の実装が呼ぶ DAO は、同じトランザクションに入る。Room 3 は、接続をコルーチンのコンテキストに載せて使い回すためである（`ConnectionPoolImpl.useConnection`）。公式ドキュメントには明記がないので、Android と iOS の両方でテスト（`RoomTransactionRunnerTest`）で確かめている。Android でもこの経路を通るのは、同梱の SQLite のドライバ（`BundledSQLiteDriver`）を使うためである。OS の SQLite のドライバ（`AndroidSQLiteDriver`）では、トランザクションをスレッドに縛る別の経路になる。ドライバを変えるときは、このテストを Android の端末で流し直す
   - Room が投げる例外は `TransactionRunnerFailure` にして返し、`CancellationException` は再送出する。狙いは、データベースを開く・トランザクションを始める・確定するときの例外である
@@ -269,13 +278,25 @@ erDiagram
 - UseCase の結果を UiState に変えるのは ViewModel で、間に層を挟まない。別の層が要るのは、同じ変換をプラットフォームごとに別々の ViewModel へ渡す場面だが、Compose Multiplatform では ViewModel が共通なので、その場面はない。どう使うかは画面ごとの責務なので、結果への反応を1か所にまとめない
   - 変換は、ViewModel の状態を読まず、UseCase の結果と入力だけから UiState を作る関数にする。同じ変換が複数の画面で要るようになったら、ViewModel の外へ移す。移しても UseCase と画面は変わらない
   - 複数の画面で使う表示の処理（分量を文字にするなど）は、`:shared:ui` の関数にする
-- ViewModel は UseCase を関数型（`suspend () -> ShowShoppingListResult`）で受け取る。`:shared:app` が UseCase の `invoke` を渡し、テストは結果を返すラムダを渡す。UseCase は `invoke` を1つだけ持つので、関数型はその形をそのまま書いた口になる
+- ViewModel は UseCase を関数型で受け取る。`:shared:app` が UseCase の `invoke` を渡し、テストは結果を返すラムダを渡す。UseCase は `invoke` を1つだけ持つので、関数型はその形をそのまま書いた口になる
   - UseCase に interface を設ける形に移すのは、次の場面が出たときとする。同じ型の引数の取り違えが問題になる（関数型では呼ぶときに引数の名前を使えない。今は `EditRecipeUseCase` の `name` と `memo` だけで、ViewModel のテストで確かめる）、本番で UseCase の実装を差し替える。移すときに変わるのは、ViewModel のコンストラクタの型と `:shared:app` の渡し方だけである
 - 画面が ViewModel を受け取る口は、`:shared:ui` の `ScreenViewModels` に置き、`AppGraph` が継ぐ。`:shared:ui` からグラフは見えないためである（「モジュール構成」）。画面は `viewModel { viewModels.… }` で受けるので、ViewModel を作るのはストアに無いときだけになる。Android の画面の回転でも作り直されない
 - グラフはプロセスに1つにする。Activity の中で作ると、画面の回転で2つ目のグラフとデータベースができ、生き残った ViewModel は古い方を使い続ける。Android は `RecipeDeckApplication` で持ち、iOS は `:shared:app` の `iosMain` のトップレベルで持つ
+- 表示し続ける画面（Recipe の一覧、買い物リスト）は、UseCase が返す `Flow` を購読し、結果が流れるたびに表示を置き換える。ViewModel に「保存したら読み直す」のような技術上の処理を持たせないためである。どの画面で保存しても、監視している画面に届く
+  - 読み込み中の表示は最初の1回だけにする。読み直しの間は今の表示を残し、終わったら結果で置き換える。失敗したら前の表示を残さず、失敗の状態にする（変換は結果と入力だけから UiState を作る、による）
+  - 読み込みに失敗した画面には、再試行のボタンを置く。読み先はローカルの SQLite だけだが、再試行すれば直る状態でも失敗画面は出うるので、復帰の導線を置く。再試行は、ViewModel が購読を張り直して行う。今は汎用の失敗の文言で、何を直せばよいかの伝え方は 17-3 で決める（未確定事項の空き容量の項）
+- 画面の構成を変える（動線を変える、タブに置く画面を変える）ときに直すのが遷移の層だけで済むよう、次のように作る。どれも、変えやすさとは別の理由で成り立つ
+  - 画面は遷移の仕組み（積み重ねなど）を受け取らず、「Recipe を押した」のような関数を受け取る。どこへ移るかは遷移の層が決める。画面が遷移のライブラリに依存せず、画面を単独で描いて確かめられるためである
+  - 画面どうしで渡すのは ID だけにする。中身は、移った先の画面が自分で読む。渡した中身が古くなって食い違うのを防ぐためで、移った先の画面はどのみち自分で監視する
+  - 表示し続ける読み出しは監視する（上の項）
+  - ViewModel は、既定では複数の画面で共有しない。画面ごとの状態が混ざらないためである。入力を複数の画面にまたいで進める流れ（追加の画面から材料の選択の画面へ移り、入力の途中を持ったまま戻る、など）では、その流れに紐づく ViewModel を共有してよい。その場合、流れの中の画面は、構成を変えるときに一緒に動かす単位になる
+  - 画面を合わせる・分ける変更では、ViewModel とそのテストを作り直す。UseCase は変わらない
+- 画面に出す文言は、`:shared:ui` の strings.xml（Compose Multiplatform のリソース）に書き、Composable に直書きしない。今は日本語だけにする。文言は利用者の語（「レシピ」など）で書き、コードの用語（`Recipe`）を持ち込まない
+- UI の型の名前は、見せ方（Row など）ではなく概念に寄せる（`RecipeListItem`。前例は domain の `ShoppingListItem`）
 - 自動テストは ViewModel だけに置く。どの結果を返すかをテストケースが選び、UiState を確かめる。本物の UseCase は動かさない。UseCase の規則は UseCase のテストで確かめ、ViewModel の責務と混ぜないためである。`:shared:ui` に JVM のターゲットはなく、共通のコードで OS の違いもないので、iOS シミュレータで流す
 - 画面は UiState を描くだけにして、守る約束は ViewModel に置く。画面の見た目と操作は、PR ごとに両 OS で確かめ、実装した範囲のスクリーンショットを PR に貼る（スクリーンショットテストと動作テストは未確定事項）
 - 各段では情報と操作の有無、状態の区別までを作り、色・文字の階層・余白は 17-8 でまとめて決める。色と文字の大きさは画面に直書きせず、テーマの値を使う
+- 画面の細部（1行に何を出すか、並び、見せ方）は仮で作り、画面を見ながら繰り返し変える。前もってすり合わせるのは、データの持ち方や層の責務などの大枠にする。UI がないうちに細部を決めるのは難しいためである
 
 ## 実装の進め方
 
@@ -490,6 +511,10 @@ Item 単独の画面を代表フローの後に置くのは、材料の入力で
 製品のデータベースに、表と進行中の Session を1件に保つトリガーが作られることを、Android のエミュレータと iOS のシミュレータで確かめた。
 買い物リストの ViewModel と画面は、17-5 で育てる。
 
+17-2 では、画面遷移を Navigation 3 にした（「技術構成」）。読み込みは、画面を作ったときに1回だけ読む形から、Repository を監視する形に変え、読み込みに失敗した画面に再試行を置いた（「データ層の方針」「UI の方針」）。
+Recipe の一覧は、Recipe を全件読み、一覧用の型は作らない。1行の中身と並びは仮で、画面を見ながら変える。下書きをどう見せても、データは Recipe の状態のままで変えない。
+一覧の行を押す操作と、Recipe の作成への導線は、作成・編集の画面と一緒に 17-3 で足す。それまでは Recipe を作る手段がないので、一覧はいつも空になる。中身のある一覧は、ViewModel のテストで確かめる。
+
 ## AI / ML
 
 PoC は完了済み。
@@ -543,7 +568,10 @@ PoC は完了済み。
 - 端末の空き容量が足りない失敗の扱い。書き込みだけでなく、データベースがあっても読み込みが失敗する（シミュレータと容量の小さいボリュームで確かめた）。今は Room の失敗はすべて `Unexpected`（汎用のエラー）になる。空き容量の不足は、ユーザーが空き容量を作れば直る失敗なので、汎用のエラーでは何をすれば直るかが伝わらない。簡単に見分けられるなら、汎用のエラーにせず、想定した失敗として分ける
   - 見せ方（OS のストレージの設定へ移るボタンを置くか、ダイアログで知らせるか）を、UI の作りから先に決める。Repository の失敗型と UseCase の結果は、その見せ方に合わせて変える。17-3 で決める
   - 見分け方について分かっていること：SQLite のドライバの例外 `androidx.sqlite.SQLiteException` はエラーコードをプロパティで持たず、メッセージ（`Error code: 13, message: database or disk is full`）にだけ持つ（sqlite 2.7.1 の `throwSQLiteException`）。見分けるにはメッセージを読むことになり、その形はライブラリの約束ではない。実際に容量が足りないときに、コード 13（`SQLITE_FULL`）以外で失敗しないか、Room が例外を包まないかは確かめていない
-- 読み込みの時機と再試行。`ShoppingListViewModel` は、ViewModel を作るときに1回だけ読む。そのため、別の画面で変更して戻っても古いままで、読み込みに失敗するとアプリを終了するまで読み直せない。読み直す形（Repository を Flow で監視する、画面に入るたびに読み直す）を、17-2 で画面遷移の形とあわせて決める。読み直す口ができれば、失敗画面の再試行はその口を呼ぶだけで作れる。読み先はローカルの SQLite だけで、ファイルの破損や不具合は再試行では直らないので、再試行を置くかはそれを踏まえて決める
+- 異なるタブをルート（スタックの一番下）とした上で、共通の Composable を参照した場合に、それがどちらのタブ側のスタックに積まれているかを監視する（区別する。Repository の `Flow` の監視とは別）ための仕組み。たとえば、レシピのタブからも買い物リストのタブからも、同じ Recipe の編集画面（`RecipeEdit(1)`）を参照した場合である。spec の未確定事項の、同じ Recipe の編集画面が2つのタブに開く場面や、別のタブの画面を元のタブのスタックに積む形を選ぶと、この場合が起きる。17-3・17-4 で決める
+  - `NavDisplay` は、画面を `contentKey` で区別し、画面の状態もこの値ごとに保存する。`contentKey` は既定で経路を文字列にした値なので、共通の Composable は、どちらのタブ側のスタックに積まれていても同じ値になる
+  - Android では、開始のタブのスタックの上に今のタブのスタックをつないで `NavDisplay` に渡す。両方のスタックに `RecipeEdit(1)` が積まれていると、同じ `contentKey` が2つ渡り、`NavDisplay` はどちらのタブ側のものか区別できない（`NavDisplay` が画面を区別する `contentKey` が重なり、画面の描き分けや、戻る操作かどうかの判定が混乱する。画面の状態と ViewModel はタブごとの decorator が持つので、そこではぶつからない）
+  - その形を選ぶときは、`contentKey` にタブを混ぜる（`"$destination/$route"` など）。どちらのタブ側のスタックに積まれているかは、`NavEntry` の `metadata` にすでに書いている
 - スクリーンショットテストと、アプリを動かす動作テスト。画面と見た目が 17-8 まで動き続け、基準の画像や操作の手順を作り直すことになるので、今は作らない。いずれ整備する。それまでは、ViewModel のテストで見つけられない不具合（ボタンが ViewModel に繋がっていない、表示の崩れ、以前の画面の破損）を、PR ごとの確認と 17-6 の通しの確認で見る
 - ログの仕組み。17-3 で決める。Repository と `TransactionRunner` の具象が捕まえた例外は、`Unexpected` の中身（`cause`）として UseCase を通り、ViewModel に届く。そこで1か所で残す形にし、data では残さない。data でも残すと、同じ失敗が二重に残るためである。`RoomTransactionRunner` が捕まえたブロックの中の不具合も失敗に紛れるので（「データ層の方針」）、このログで見つける
 - Room のスキーマの書き出し（`exportSchema`）と、データベースの版の上げ方（移行）。今は版 1 で、スキーマを書き出していない。リリースまでは、表を変えても版 1 のまま変えてよい（開発中の端末では、アプリを入れ直して作り直す）。リリースの前に、スキーマを書き出してリポジトリに置くか、移行をどう書いてどう確かめるかを決める。進行中の Session を1件に保つトリガー（「データ層の方針」）は、Room のスキーマにも書き出しにも載らないので、表を作り直す移行ではトリガーも作り直し、残っていることを確かめる

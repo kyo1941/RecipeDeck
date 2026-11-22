@@ -14,6 +14,7 @@ import com.example.recipedeck.domain.recipe.RecipeRepository
 import com.example.recipedeck.domain.shopping.PurchaseRecordRepository
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepository
 import com.example.recipedeck.ui.ScreenViewModels
+import com.example.recipedeck.ui.recipe.RecipeListViewModel
 import com.example.recipedeck.ui.shopping.ShoppingListViewModel
 import com.example.recipedeck.usecase.item.CreateItemUseCase
 import com.example.recipedeck.usecase.item.DuplicateCandidateFinder
@@ -22,6 +23,7 @@ import com.example.recipedeck.usecase.item.RenameItemUseCase
 import com.example.recipedeck.usecase.item.SearchItemsUseCase
 import com.example.recipedeck.usecase.recipe.CreateRecipeUseCase
 import com.example.recipedeck.usecase.recipe.EditRecipeUseCase
+import com.example.recipedeck.usecase.recipe.ShowRecipeListUseCase
 import com.example.recipedeck.usecase.shopping.AddRecipeToShoppingSessionUseCase
 import com.example.recipedeck.usecase.shopping.FindSessionDuplicateCandidatesUseCase
 import com.example.recipedeck.usecase.shopping.MarkShoppingListItemPurchasedUseCase
@@ -40,6 +42,7 @@ interface AppGraph : ScreenViewModels {
     val renameItemUseCase: RenameItemUseCase
     val createRecipeUseCase: CreateRecipeUseCase
     val editRecipeUseCase: EditRecipeUseCase
+    val showRecipeListUseCase: ShowRecipeListUseCase
     val addRecipeToShoppingSessionUseCase: AddRecipeToShoppingSessionUseCase
     val findSessionDuplicateCandidatesUseCase: FindSessionDuplicateCandidatesUseCase
     val showShoppingListUseCase: ShowShoppingListUseCase
@@ -138,6 +141,14 @@ interface AppGraph : ScreenViewModels {
         shoppingSessionRepository: ShoppingSessionRepository,
         purchaseRecordRepository: PurchaseRecordRepository,
     ): MarkShoppingListItemPurchasedUseCase = MarkShoppingListItemPurchasedUseCase(shoppingSessionRepository, purchaseRecordRepository)
+
+    @Provides
+    fun provideShowRecipeListUseCase(recipeRepository: RecipeRepository): ShowRecipeListUseCase =
+        ShowRecipeListUseCase(recipeRepository)
+
+    @Provides
+    fun provideRecipeListViewModel(showRecipeListUseCase: ShowRecipeListUseCase): RecipeListViewModel =
+        RecipeListViewModel(showRecipeList = showRecipeListUseCase::invoke)
 
     @Provides
     fun provideShoppingListViewModel(showShoppingListUseCase: ShowShoppingListUseCase): ShoppingListViewModel =
