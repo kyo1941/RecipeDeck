@@ -11,12 +11,13 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.ui.NavDisplay
+import androidx.navigation3.ui.defaultPopTransitionSpec
+import androidx.navigation3.ui.defaultTransitionSpec
 import com.example.recipedeck.ui.navigation.RecipeDeckNavigation
-import com.example.recipedeck.ui.navigation.ReturnToStartDestinationOnBack
 import com.example.recipedeck.ui.navigation.Route
 import com.example.recipedeck.ui.navigation.TopLevelDestination
-import com.example.recipedeck.ui.navigation.forwardTransitionExceptDestinationChange
 import com.example.recipedeck.ui.navigation.rememberRecipeDeckNavigation
+import com.example.recipedeck.ui.navigation.withoutAnimationOnDestinationChange
 import com.example.recipedeck.ui.recipe.RecipeListScreen
 import com.example.recipedeck.ui.shopping.ShoppingListScreen
 import org.jetbrains.compose.resources.stringResource
@@ -25,15 +26,12 @@ import org.jetbrains.compose.resources.stringResource
 fun RecipeDeckApp(viewModels: ScreenViewModels) {
     MaterialTheme {
         val navigation = rememberRecipeDeckNavigation()
-        ReturnToStartDestinationOnBack(
-            enabled = navigation.isAtRootOfNonStartDestination,
-            onBack = { navigation.select(TopLevelDestination.START) },
-        )
         Scaffold(bottomBar = { TopLevelNavigationBar(navigation) }) { innerPadding ->
             NavDisplay(
-                entries = navigation.currentEntries { route -> screenOf(route, viewModels) },
+                entries = navigation.displayedEntries { route -> screenOf(route, viewModels) },
                 modifier = Modifier.padding(innerPadding),
-                transitionSpec = forwardTransitionExceptDestinationChange(),
+                transitionSpec = withoutAnimationOnDestinationChange(defaultTransitionSpec()),
+                popTransitionSpec = withoutAnimationOnDestinationChange(defaultPopTransitionSpec()),
                 onBack = navigation::goBack,
             )
         }

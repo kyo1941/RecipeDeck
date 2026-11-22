@@ -21,7 +21,6 @@ import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.runtime.serialization.NavBackStackSerializer
 import androidx.navigation3.scene.Scene
-import androidx.navigation3.ui.defaultTransitionSpec
 import androidx.savedstate.compose.serialization.serializers.MutableStateSerializer
 
 class RecipeDeckNavigation(
@@ -31,24 +30,22 @@ class RecipeDeckNavigation(
     var currentDestination: TopLevelDestination by currentDestination
         private set
 
-    val isAtRootOfNonStartDestination: Boolean
-        get() = currentDestination != TopLevelDestination.START && backStacks.getValue(currentDestination).size == 1
-
     fun select(destination: TopLevelDestination) {
         currentDestination = destination
     }
 
     fun goBack() {
-        backStacks.getValue(currentDestination).removeLastOrNull()
+        val backStack = backStacks.getValue(currentDestination)
+        if (backStack.size > 1) backStack.removeLastOrNull() else select(TopLevelDestination.START)
     }
 
     /**
      * NavDisplay に decorator を直接渡すと、タブの切り替えが pop として扱われ、decorator が持つ状態が捨てられる。
-     * そのため、まとめて全ての BackStack の分を作り、今のタブの分だけ返す。
+     * そのため、まとめて全ての BackStack の分を作り、表示する分だけ返す。
      */
     @Composable
-    fun currentEntries(entryProvider: (Route) -> NavEntry<Route>): List<NavEntry<Route>> =
-        backStacks.mapValues { (_, backStack) ->
+    fun displayedEntries(entryProvider: (Route) -> NavEntry<Route>): List<NavEntry<Route>> {
+        val entriesByDestination = backStacks.mapValues { (destination, backStack) ->
             rememberDecoratedNavEntries(
                 backStack = backStack,
                 entryDecorators = listOf(
@@ -56,10 +53,22 @@ class RecipeDeckNavigation(
                     rememberViewModelStoreNavEntryDecorator(),
                     OpaqueBackgroundNavEntryDecorator,
                 ),
-                entryProvider = entryProvider,
+                entryProvider = { route ->
+                    val entry = entryProvider(route)
+                    NavEntry(route, entry.contentKey, entry.metadata + (DESTINATION_METADATA_KEY to destination)) { entry.Content() }
+                },
             )
-        }.getValue(currentDestination)
+        }
+        val currentEntries = entriesByDestination.getValue(currentDestination)
+        return if (currentDestination == TopLevelDestination.START) {
+            currentEntries
+        } else {
+            entriesBeneathNonStartDestination(entriesByDestination.getValue(TopLevelDestination.START)) + currentEntries
+        }
+    }
 }
+
+private const val DESTINATION_METADATA_KEY = "topLevelDestination"
 
 /**
  * NavDisplay は、切り替えの間、次の画面を前の画面の上に重ねて描くので、画面に背景がないと前の画面が透けて見える。
@@ -67,18 +76,20 @@ class RecipeDeckNavigation(
 private val OpaqueBackgroundNavEntryDecorator = NavEntryDecorator<Route> { entry -> Surface { entry.Content() } }
 
 /**
- * NavDisplay は、積み重ねの先頭が変わると進む操作として動かすので、先頭が変わるタブの切り替えでは動かさない。
+ * NavDisplay はタブの切り替えも積む・外すとして動かすので、一番上の画面のタブが変わる切り替えでは動かさない。
  */
-fun forwardTransitionExceptDestinationChange(): AnimatedContentTransitionScope<Scene<Route>>.() -> ContentTransform = {
-    if (initialState.root != targetState.root) {
+fun withoutAnimationOnDestinationChange(
+    transition: AnimatedContentTransitionScope<Scene<Route>>.() -> ContentTransform,
+): AnimatedContentTransitionScope<Scene<Route>>.() -> ContentTransform = {
+    if (initialState.destination != targetState.destination) {
         EnterTransition.None togetherWith ExitTransition.None
     } else {
-        defaultTransitionSpec<Route>()()
+        transition()
     }
 }
 
-private val Scene<Route>.root: Any
-    get() = (previousEntries + entries).first().contentKey
+private val Scene<Route>.destination: TopLevelDestination?
+    get() = entries.last().metadata[DESTINATION_METADATA_KEY] as? TopLevelDestination
 
 @Composable
 fun rememberRecipeDeckNavigation(): RecipeDeckNavigation {

@@ -34,9 +34,6 @@ kotlin {
             implementation(libs.kotlinx.serialization.core)
             api(libs.androidx.lifecycle.viewmodel.compose)
         }
-        androidMain.dependencies {
-            implementation(libs.androidx.navigationevent.compose)
-        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
