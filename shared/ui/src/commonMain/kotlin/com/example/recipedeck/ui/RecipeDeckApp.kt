@@ -7,7 +7,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavEntry
@@ -16,6 +15,7 @@ import com.example.recipedeck.ui.navigation.RecipeDeckNavigation
 import com.example.recipedeck.ui.navigation.ReturnToStartDestinationOnBack
 import com.example.recipedeck.ui.navigation.Route
 import com.example.recipedeck.ui.navigation.TopLevelDestination
+import com.example.recipedeck.ui.navigation.forwardTransitionExceptDestinationChange
 import com.example.recipedeck.ui.navigation.rememberRecipeDeckNavigation
 import com.example.recipedeck.ui.recipe.RecipeListScreen
 import com.example.recipedeck.ui.shopping.ShoppingListScreen
@@ -25,19 +25,17 @@ import org.jetbrains.compose.resources.stringResource
 fun RecipeDeckApp(viewModels: ScreenViewModels) {
     MaterialTheme {
         val navigation = rememberRecipeDeckNavigation()
-        val entriesByDestination = navigation.entriesByDestination { route -> screenOf(route, viewModels) }
         ReturnToStartDestinationOnBack(
             enabled = navigation.isAtRootOfNonStartDestination,
             onBack = { navigation.select(TopLevelDestination.START) },
         )
         Scaffold(bottomBar = { TopLevelNavigationBar(navigation) }) { innerPadding ->
-            key(navigation.currentDestination) {
-                NavDisplay(
-                    entries = entriesByDestination.getValue(navigation.currentDestination),
-                    modifier = Modifier.padding(innerPadding),
-                    onBack = navigation::goBack,
-                )
-            }
+            NavDisplay(
+                entries = navigation.currentEntries { route -> screenOf(route, viewModels) },
+                modifier = Modifier.padding(innerPadding),
+                transitionSpec = forwardTransitionExceptDestinationChange(),
+                onBack = navigation::goBack,
+            )
         }
     }
 }
