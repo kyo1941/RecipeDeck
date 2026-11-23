@@ -337,11 +337,19 @@ AI の応答が遅い場合や利用しない場合は、該当 UseCase への�
   - iOS：[HIG の Tab bars](https://developer.apple.com/design/human-interface-guidelines/tab-bars) は、タブバーを隠してよいのはモーダルが覆うときだけとしている。[HIG の Modality](https://developer.apple.com/design/human-interface-guidelines/modality) は、込み入った作業や編集に全画面のモーダルを挙げている
   - Android：Material の全画面ダイアログ（[Material Components for Android の Dialog](https://github.com/material-components/material-components-android/blob/master/docs/components/Dialog.md) の Full-screen dialog）にあたる。下層の画面でナビゲーションバーを出すか隠すかは、Android の公式のガイドでは決まっていない
   - 閲覧だけの画面を作るときは、フッターを出したまま積む（HIG の Tab bars）
+- Recipe の画面は、見る状態と編集の状態を持つ1つの画面にする。一覧の行を押すと、見る状態をフッターを出したまま積む。見る状態から編集の操作をすると、編集の状態を全画面のモーダルで開き、保存か破棄で閉じると見る状態に戻る。Recipe の作成は、編集の状態のモーダルを直接開く
+- 編集の状態で保存も破棄もせずにアプリが終わったときは（OS が終わらせた場合も、利用者がタスクキルした場合も）、その入力（残った編集）を残す
+  - 新しく作っている途中の Recipe の残った編集は、Recipe の一覧の上に示し、破棄するか、残った編集を反映した編集の状態に進むかを選ばせる
+  - それ以外の開き方では、編集の状態をいつもどおり開き、残った編集があることを示して、反映するか破棄するかを選ばせる
+  - 反映は、残った編集の全体をまとめて編集の状態に入れる。材料だけ、メモだけのような部分的な反映はしない
+  - 閉じるときは確かめる（上の項）ので、残った編集が残るのは、途中でアプリが終わった場合だけになる
 - 戻る操作は、各 OS の慣習に従う
   - Android：タブの中で積んだ画面を1つずつ戻る。開始のタブ以外のタブの最初の画面で戻ると、開始のタブへ移り、開始のタブで積んだ画面をそのまま見せる。開始のタブの最初の画面で戻ると、アプリを閉じる（開始の画面を通って閉じる。[Principles of navigation](https://developer.android.com/guide/navigation/principles) の Fixed start destination、[Multiple back stacks recipe](https://developer.android.com/guide/navigation/navigation-3/recipes/multiple-backstacks)）。モーダルは、戻る操作と上部の「×」で閉じる
   - iOS：左端のスワイプは、タブの中で積んだ画面を戻るだけで、タブは移らない（[interactivePopGestureRecognizer](https://developer.apple.com/documentation/uikit/uinavigationcontroller/interactivepopgesturerecognizer) はナビゲーションの積み重ねを戻す。[HIG の Tab bars](https://developer.apple.com/design/human-interface-guidelines/tab-bars) では、タブはアプリの最上位の区分で、それぞれの状態を保つ）。iOS では戻る操作でアプリを閉じることはなく、アプリが自分を終わらせる API もない（[QA1561](https://developer.apple.com/library/archive/qa/qa1561/_index.html)）。全画面のモーダルは、左端のスワイプでは閉じず、上部の「キャンセル」で閉じる
 - Recipe の一覧には、下書きも含めてすべての Recipe を出す。1行の中身、並び、下書きの見せ方は仮で、画面を見ながら決める
 - 読み込みに失敗した画面には、再試行の導線を置く
+- 保存に失敗したときは、モーダルを閉じずに入力を残し、失敗を伝える
+- 読み込みや保存の失敗の文言には、端末の空き容量が足りない場合の対処（空き容量を増やしてからもう一度試す）を含める。空き容量の不足は、ほかの失敗と見分けずに伝える
 
 ## 未確定事項
 
@@ -379,6 +387,7 @@ AI の応答が遅い場合や利用しない場合は、該当 UseCase への�
 - Item の削除を提供するか。提供する場合、Recipe から使われている Item をどう扱うか。Session は表示名を持つので、Item を削除しても Session の中身は変わらない。あわせて、Recipe の保存時に、材料で選ばれた既存の Item が存在するかを確かめるかも決める（現時点では、削除の手段がないため確かめていない。Session への Recipe の追加では、表示名を写すために確かめている）
 - 既存の Item の検索と候補を、読み仮名でも当てられるようにするか。今は表示名の文字で比べるので、「ねぎし」と入力しても「ねぎ塩」は当たらない。ユーザーに読みを入力させるのは避けたいので、設けるなら、表示名から読みを推定して Item と一緒に持つ形などを考える。持つデータが変わるので、MVP の後に決める
 - フッターに、Recipe の一覧と買い物リストのほかのタブを置くか（[画面の構成](#画面の構成)）。今は2つで足りている
+- 残った編集と今の Recipe の違いを、利用者に見やすい形で見せるか。今は見せず、反映するか破棄するかだけを選ばせる
 - Recipe の一覧の並び方を、ユーザーが選べるようにしたい。どのキーで並べられるようにするか、選んだ並び方を覚えるか、キーのデータ（作成日時など）を持つかは、その機能を作るときに決める。その機能をリリースの前に作らないなら、作成日時を持たせるかだけはリリースの前に決める。リリースまでは表を変えても入れ直しで済むが、リリースの後に足すと、それまでに作った Recipe の作成日時が分からないためである
 - 検索結果や候補の並びに、文字の一致の度合い（[Item](#item)）のほかの手がかりを使うか。例えば、ユーザーがその Item を選んだ回数や、Session に追加した回数が多いものを先にする。記録するデータが増えるので、MVP の後に決める
 
