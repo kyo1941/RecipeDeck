@@ -8,4 +8,16 @@
     <string name="recipe_list_no_recipes">レシピはまだありません</string>
     <string name="recipe_list_load_failed">レシピを読み込めませんでした</string>
     <string name="recipe_list_draft">下書き</string>
+    <string name="navigation_back">戻る</string>
+    <string name="recipe_load_failed">レシピを読み込めませんでした</string>
+    <string name="recipe_no_longer_exists">このレシピは見つかりません</string>
+    <string name="recipe_draft">下書き</string>
+    <string name="recipe_ingredients">材料</string>
+    <string name="recipe_no_ingredients">材料はありません</string>
+    <string name="recipe_memo">メモ</string>
+    <string name="amount_unit_piece">個</string>
+    <string name="amount_unit_gram">g</string>
+    <string name="amount_unit_kilogram">kg</string>
+    <string name="amount_unit_milliliter">ml</string>
+    <string name="amount_unit_liter">L</string>
 </resources>

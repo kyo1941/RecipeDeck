@@ -67,6 +67,17 @@ class RoomRecipeRepository(private val database: RecipeDeckDatabase) : RecipeRep
                 dao.findAll().map { it.toRecipe(ingredientsByRecipeId[it.id].orEmpty()) }.toImmutableSet()
             }
         }
+
+    override fun observeById(id: RecipeId): Flow<Outcome<Recipe?, RecipeRepositoryFailure>> =
+        database.observeOutcomeOf(
+            RecipeEntity.TABLE_NAME,
+            RecipeIngredientEntity.TABLE_NAME,
+            toFailure = RecipeRepositoryFailure::Unexpected,
+        ) {
+            database.withReadTransaction {
+                dao.findById(id.value)?.toRecipe(dao.findIngredients(id.value))
+            }
+        }
 }
 
 private val RecipeStatus.storedValue: String

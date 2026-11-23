@@ -5,8 +5,12 @@ import androidx.room3.Entity
 import androidx.room3.Index
 import androidx.room3.PrimaryKey
 
-@Entity(tableName = "item", indices = [Index(value = ["display_name"], unique = true)])
+@Entity(tableName = ItemEntity.TABLE_NAME, indices = [Index(value = ["display_name"], unique = true)])
 internal data class ItemEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "display_name") val displayName: String,
-)
+) {
+    companion object {
+        const val TABLE_NAME = "item"
+    }
+}

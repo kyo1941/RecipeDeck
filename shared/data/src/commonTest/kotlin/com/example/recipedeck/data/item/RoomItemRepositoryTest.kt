@@ -1,7 +1,9 @@
 package com.example.recipedeck.data.item
 
 import com.example.recipedeck.data.notBlankStringOrFail
+import com.example.recipedeck.data.observedValues
 import com.example.recipedeck.data.runTestWithRecipeDeckDatabase
+import com.example.recipedeck.data.writeSql
 import com.example.recipedeck.domain.Outcome
 import com.example.recipedeck.domain.item.Item
 import com.example.recipedeck.domain.item.ItemId
@@ -76,6 +78,28 @@ class RoomItemRepositoryTest {
         val result = repository.findByIds(setOf(ItemId("item-1"), ItemId("item-3"), ItemId("item-9")))
 
         assertEquals(Outcome.Success(persistentListOf(item("item-1", "玉ねぎ"), item("item-3", "豆腐"))), result)
+    }
+
+    @Test
+    fun IDでの監視は指定したIDのItemだけを流す() = runTestWithRecipeDeckDatabase { database ->
+        val repository = RoomItemRepository(database)
+        listOf(item("item-1", "玉ねぎ"), item("item-2", "豚肉"), item("item-3", "豆腐")).forEach { repository.save(it) }
+
+        val values = observedValues(repository.observeByIds(setOf(ItemId("item-1"), ItemId("item-3"))))
+
+        assertEquals(Outcome.Success(persistentListOf(item("item-1", "玉ねぎ"), item("item-3", "豆腐"))), values.receive())
+    }
+
+    @Test
+    fun IDでの監視は表示名が変わると流し直す() = runTestWithRecipeDeckDatabase { database ->
+        val repository = RoomItemRepository(database)
+        repository.save(item("item-1", "玉ねぎ"))
+        val values = observedValues(repository.observeByIds(setOf(ItemId("item-1"))))
+        values.receive()
+
+        database.writeSql("UPDATE item SET display_name = 'たまねぎ' WHERE id = 'item-1'")
+
+        assertEquals(Outcome.Success(persistentListOf(item("item-1", "たまねぎ"))), values.receive())
     }
 
     @Test

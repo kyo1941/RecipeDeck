@@ -30,6 +30,9 @@ class FakeRecipeRepository : RecipeRepository {
         return Outcome.Success(savedRecipes.lastOrNull { it.id == id })
     }
 
+    override fun observeById(id: RecipeId): Flow<Outcome<Recipe?, RecipeRepositoryFailure>> =
+        saveCount.map { findFailure?.let { Outcome.Failure(it) } ?: Outcome.Success(savedRecipes.lastOrNull { it.id == id }) }
+
     override fun observeAll(): Flow<Outcome<ImmutableSet<Recipe>, RecipeRepositoryFailure>> =
         saveCount.map {
             findFailure?.let { Outcome.Failure(it) } ?: Outcome.Success(savedRecipes.associateBy { it.id }.values.toImmutableSet())

@@ -15,6 +15,8 @@ import com.example.recipedeck.domain.shopping.PurchaseRecordRepository
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepository
 import com.example.recipedeck.ui.ScreenViewModels
 import com.example.recipedeck.ui.recipe.RecipeListViewModel
+import com.example.recipedeck.ui.recipe.RecipeViewModel
+import com.example.recipedeck.ui.recipe.RecipeViewModelFactory
 import com.example.recipedeck.ui.shopping.ShoppingListViewModel
 import com.example.recipedeck.usecase.item.CreateItemUseCase
 import com.example.recipedeck.usecase.item.DuplicateCandidateFinder
@@ -24,6 +26,7 @@ import com.example.recipedeck.usecase.item.SearchItemsUseCase
 import com.example.recipedeck.usecase.recipe.CreateRecipeUseCase
 import com.example.recipedeck.usecase.recipe.EditRecipeUseCase
 import com.example.recipedeck.usecase.recipe.ShowRecipeListUseCase
+import com.example.recipedeck.usecase.recipe.ShowRecipeUseCase
 import com.example.recipedeck.usecase.shopping.AddRecipeToShoppingSessionUseCase
 import com.example.recipedeck.usecase.shopping.FindSessionDuplicateCandidatesUseCase
 import com.example.recipedeck.usecase.shopping.MarkShoppingListItemPurchasedUseCase
@@ -145,6 +148,14 @@ interface AppGraph : ScreenViewModels {
     @Provides
     fun provideShowRecipeListUseCase(recipeRepository: RecipeRepository): ShowRecipeListUseCase =
         ShowRecipeListUseCase(recipeRepository)
+
+    @Provides
+    fun provideShowRecipeUseCase(recipeRepository: RecipeRepository, itemRepository: ItemRepository): ShowRecipeUseCase =
+        ShowRecipeUseCase(recipeRepository, itemRepository)
+
+    @Provides
+    fun provideRecipeViewModelFactory(showRecipeUseCase: ShowRecipeUseCase): RecipeViewModelFactory =
+        RecipeViewModelFactory { recipeId -> RecipeViewModel(showRecipe = { showRecipeUseCase(recipeId) }) }
 
     @Provides
     fun provideRecipeListViewModel(showRecipeListUseCase: ShowRecipeListUseCase): RecipeListViewModel =

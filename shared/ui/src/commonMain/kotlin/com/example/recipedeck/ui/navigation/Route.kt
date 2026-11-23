@@ -10,4 +10,7 @@ sealed interface Route : NavKey {
 
     @Serializable
     data object ShoppingList : Route
+
+    @Serializable
+    data class Recipe(val recipeId: String) : Route
 }

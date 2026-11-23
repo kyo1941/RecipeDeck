@@ -34,6 +34,10 @@ class RecipeDeckNavigation(
         currentDestination = destination
     }
 
+    fun open(route: Route) {
+        backStacks.getValue(currentDestination).add(route)
+    }
+
     fun goBack() {
         val backStack = backStacks.getValue(currentDestination)
         if (backStack.size > 1) backStack.removeLastOrNull() else select(TopLevelDestination.START)

@@ -8,16 +8,22 @@ import com.example.recipedeck.domain.item.ItemRepository
 import com.example.recipedeck.domain.item.ItemRepositoryFailure
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 
 class FakeItemRepository : ItemRepository {
     val savedItems = mutableListOf<Item>()
     var saveFailure: ItemRepositoryFailure? = null
     var findFailure: ItemRepositoryFailure? = null
+    private val saveCount = MutableStateFlow(0)
 
     override suspend fun save(item: Item): Outcome<Unit, ItemRepositoryFailure> {
         saveFailure?.let { return Outcome.Failure(it) }
         val index = savedItems.indexOfFirst { it.id == item.id }
         if (index >= 0) savedItems[index] = item else savedItems += item
+        saveCount.update { it + 1 }
         return Outcome.Success(Unit)
     }
 
@@ -26,6 +32,9 @@ class FakeItemRepository : ItemRepository {
 
     override suspend fun findByIds(ids: Set<ItemId>): Outcome<ImmutableList<Item>, ItemRepositoryFailure> =
         find { items -> items.filter { it.id in ids }.toImmutableList() }
+
+    override fun observeByIds(ids: Set<ItemId>): Flow<Outcome<ImmutableList<Item>, ItemRepositoryFailure>> =
+        saveCount.map { find { items -> items.filter { it.id in ids }.toImmutableList() } }
 
     override suspend fun findByDisplayName(displayName: NotBlankString): Outcome<Item?, ItemRepositoryFailure> =
         find { items -> items.firstOrNull { it.displayName == displayName } }
