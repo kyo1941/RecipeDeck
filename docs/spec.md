@@ -331,11 +331,15 @@ AI の応答が遅い場合や利用しない場合は、該当 UseCase への�
 確定事項：
 
 - フッターに「レシピ」（Recipe の一覧）と「買い物リスト」の2つのタブを置く。2つは別々の画面にする。開始のタブは「レシピ」
-- ほかの画面への動線は、フッターに限らず用意してよい（買い物リストから Recipe の追加へ、など）
+- ほかの画面への動線は、フッターに限らず用意してよい（買い物リストから Recipe の追加へ、など）。画面の中の動線ではタブを移らず、移った先の画面は今のタブで出す。別のタブへ移る形では、移った先のタブがすでに持つ積み重ねの上に積むか積み直すか、同じ画面が2つ開いたときのデータの重複・競合・鮮度を決めることになるためである
 - タブ同士では画面を積まない。各タブは自分の画面の積み重ね（戻る操作で戻れる画面の並び）を持ち、ほかのタブを見ている間も、積み重ねと画面の状態（スクロールの位置など）を保つ
+- Recipe の作成・編集と Session への追加は、フッターを覆う全画面のモーダルで出す。上部に閉じる操作と保存を置き、入力が失われるときは、閉じる前に確かめる。モーダルを開いている間は別のタブへ移れないので、同じ画面が2つのタブに開くことはない
+  - iOS：[HIG の Tab bars](https://developer.apple.com/design/human-interface-guidelines/tab-bars) は、タブバーを隠してよいのはモーダルが覆うときだけとしている。[HIG の Modality](https://developer.apple.com/design/human-interface-guidelines/modality) は、込み入った作業や編集に全画面のモーダルを挙げている
+  - Android：Material の全画面ダイアログ（[Material Components for Android の Dialog](https://github.com/material-components/material-components-android/blob/master/docs/components/Dialog.md) の Full-screen dialog）にあたる。下層の画面でナビゲーションバーを出すか隠すかは、Android の公式のガイドでは決まっていない
+  - 閲覧だけの画面を作るときは、フッターを出したまま積む（HIG の Tab bars）
 - 戻る操作は、各 OS の慣習に従う
-  - Android：タブの中で積んだ画面を1つずつ戻る。開始のタブ以外のタブの最初の画面で戻ると、開始のタブへ移る。開始のタブの最初の画面で戻ると、アプリを閉じる（開始の画面を通って閉じる。[Principles of navigation](https://developer.android.com/guide/navigation/principles) の Fixed start destination、[Multiple back stacks recipe](https://developer.android.com/guide/navigation/navigation-3/recipes/multiple-backstacks)）
-  - iOS：左端のスワイプは、タブの中で積んだ画面を戻るだけで、タブは移らない（[interactivePopGestureRecognizer](https://developer.apple.com/documentation/uikit/uinavigationcontroller/interactivepopgesturerecognizer) はナビゲーションの積み重ねを戻す。[HIG の Tab bars](https://developer.apple.com/design/human-interface-guidelines/tab-bars) では、タブはアプリの最上位の区分で、それぞれの状態を保つ）。iOS では戻る操作でアプリを閉じることはなく、アプリが自分を終わらせる API もない（[QA1561](https://developer.apple.com/library/archive/qa/qa1561/_index.html)）
+  - Android：タブの中で積んだ画面を1つずつ戻る。開始のタブ以外のタブの最初の画面で戻ると、開始のタブへ移り、開始のタブで積んだ画面をそのまま見せる。開始のタブの最初の画面で戻ると、アプリを閉じる（開始の画面を通って閉じる。[Principles of navigation](https://developer.android.com/guide/navigation/principles) の Fixed start destination、[Multiple back stacks recipe](https://developer.android.com/guide/navigation/navigation-3/recipes/multiple-backstacks)）。モーダルは、戻る操作と上部の「×」で閉じる
+  - iOS：左端のスワイプは、タブの中で積んだ画面を戻るだけで、タブは移らない（[interactivePopGestureRecognizer](https://developer.apple.com/documentation/uikit/uinavigationcontroller/interactivepopgesturerecognizer) はナビゲーションの積み重ねを戻す。[HIG の Tab bars](https://developer.apple.com/design/human-interface-guidelines/tab-bars) では、タブはアプリの最上位の区分で、それぞれの状態を保つ）。iOS では戻る操作でアプリを閉じることはなく、アプリが自分を終わらせる API もない（[QA1561](https://developer.apple.com/library/archive/qa/qa1561/_index.html)）。全画面のモーダルは、左端のスワイプでは閉じず、上部の「キャンセル」で閉じる
 - Recipe の一覧には、下書きも含めてすべての Recipe を出す。1行の中身、並び、下書きの見せ方は仮で、画面を見ながら決める
 - 読み込みに失敗した画面には、再試行の導線を置く
 
@@ -375,9 +379,6 @@ AI の応答が遅い場合や利用しない場合は、該当 UseCase への�
 - Item の削除を提供するか。提供する場合、Recipe から使われている Item をどう扱うか。Session は表示名を持つので、Item を削除しても Session の中身は変わらない。あわせて、Recipe の保存時に、材料で選ばれた既存の Item が存在するかを確かめるかも決める（現時点では、削除の手段がないため確かめていない。Session への Recipe の追加では、表示名を写すために確かめている）
 - 既存の Item の検索と候補を、読み仮名でも当てられるようにするか。今は表示名の文字で比べるので、「ねぎし」と入力しても「ねぎ塩」は当たらない。ユーザーに読みを入力させるのは避けたいので、設けるなら、表示名から読みを推定して Item と一緒に持つ形などを考える。持つデータが変わるので、MVP の後に決める
 - フッターに、Recipe の一覧と買い物リストのほかのタブを置くか（[画面の構成](#画面の構成)）。今は2つで足りている
-- 下層の画面（Recipe の作成・編集、Session への追加）でもフッターを出すか。出すと、作成の途中で買い物リストを見に行き、戻って続けられる。その場合、同じ Recipe の編集画面が2つのタブに開く場面の扱いも要る。17-3・17-4（architecture.md の「実装の進め方」）で決める
-- 画面の中のリンクで別のタブの画面へ移るとき（買い物リストから Recipe の追加へ、など）、その画面を元のタブの積み重ねに積むか、移った先のタブの積み重ねに積むか。17-3・17-4 で決める
-- Android で開始のタブ以外のタブの最初の画面で戻り、開始のタブへ移るとき、開始のタブで積んだ画面をそのまま見せるか、開始のタブの最初の画面を見せるか。今は積んだ画面をそのまま見せる。タブの中で画面を積む 17-3 で決める
 - Recipe の一覧の並び方を、ユーザーが選べるようにしたい。どのキーで並べられるようにするか、選んだ並び方を覚えるか、キーのデータ（作成日時など）を持つかは、その機能を作るときに決める。その機能をリリースの前に作らないなら、作成日時を持たせるかだけはリリースの前に決める。リリースまでは表を変えても入れ直しで済むが、リリースの後に足すと、それまでに作った Recipe の作成日時が分からないためである
 - 検索結果や候補の並びに、文字の一致の度合い（[Item](#item)）のほかの手がかりを使うか。例えば、ユーザーがその Item を選んだ回数や、Session に追加した回数が多いものを先にする。記録するデータが増えるので、MVP の後に決める
 
