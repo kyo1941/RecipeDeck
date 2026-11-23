@@ -2,6 +2,7 @@ package com.example.recipedeck.ui.shopping
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import co.touchlab.kermit.Logger
 import com.example.recipedeck.usecase.shopping.ShowShoppingListResult
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 
@@ -24,6 +26,7 @@ class ShoppingListViewModel(
     val uiState: StateFlow<ShoppingListUiState> = retryRequests
         .onStart { emit(Unit) }
         .flatMapLatest { showShoppingList() }
+        .onEach { if (it is ShowShoppingListResult.Unexpected) logger.e(it.cause) { "買い物リストを読み込めなかった" } }
         .map { it.toUiState() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), ShoppingListUiState.Loading)
 
@@ -33,6 +36,7 @@ class ShoppingListViewModel(
 
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
+        val logger = Logger.withTag("ShoppingListViewModel")
     }
 }
 

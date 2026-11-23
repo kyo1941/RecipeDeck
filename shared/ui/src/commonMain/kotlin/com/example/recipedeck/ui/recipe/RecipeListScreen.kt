@@ -20,6 +20,7 @@ import com.example.recipedeck.ui.resources.load_retry
 import com.example.recipedeck.ui.resources.recipe_list_draft
 import com.example.recipedeck.ui.resources.recipe_list_load_failed
 import com.example.recipedeck.ui.resources.recipe_list_no_recipes
+import com.example.recipedeck.ui.resources.storage_shortage_hint
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -43,6 +44,7 @@ fun RecipeListScreen(viewModel: RecipeListViewModel, modifier: Modifier = Modifi
         }
         RecipeListUiState.LoadFailed -> CenteredContent(modifier) {
             Text(stringResource(Res.string.recipe_list_load_failed))
+            Text(stringResource(Res.string.storage_shortage_hint))
             Button(onClick = viewModel::retry) { Text(stringResource(Res.string.load_retry)) }
         }
     }

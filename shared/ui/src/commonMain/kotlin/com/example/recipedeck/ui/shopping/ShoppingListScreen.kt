@@ -18,6 +18,7 @@ import com.example.recipedeck.ui.resources.Res
 import com.example.recipedeck.ui.resources.load_retry
 import com.example.recipedeck.ui.resources.shopping_list_load_failed
 import com.example.recipedeck.ui.resources.shopping_list_no_active_session
+import com.example.recipedeck.ui.resources.storage_shortage_hint
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -32,6 +33,7 @@ fun ShoppingListScreen(viewModel: ShoppingListViewModel, modifier: Modifier = Mo
         }
         ShoppingListUiState.LoadFailed -> CenteredContent(modifier) {
             Text(stringResource(Res.string.shopping_list_load_failed))
+            Text(stringResource(Res.string.storage_shortage_hint))
             Button(onClick = viewModel::retry) { Text(stringResource(Res.string.load_retry)) }
         }
     }

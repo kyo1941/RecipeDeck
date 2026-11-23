@@ -19,6 +19,7 @@
 - 画面の部品は Material 3 を使う。版は Compose Multiplatform の対応表にあるもの（今は `1.12.0-alpha03`）にする。対応表の Material 3 は alpha だが、API が変わって困るのは版を上げるときだけで、版は固定している。使っていて不具合に当たったら、別の版を検討する
 - Android と iOS のローカルの保存は Room 3（`androidx.room3`）を使う。Room 2 系（`androidx.room`）も KMP に対応しているが、Room 3 はドライバ（`SQLiteDriver`）を必須にして、Android だけの古い経路（SupportSQLite）を外した。そのため、Android と iOS で同じコードの経路を通しやすい。コードの生成には KSP を使う
   - ドライバは、Android・iOS とも、アプリに同梱する SQLite（`BundledSQLiteDriver`）を使う。OS の SQLite を使うドライバ（`AndroidSQLiteDriver`）では、Room 2 と同じく、トランザクションをスレッドに縛る Android だけの経路になり（「データ層の方針」）、SQLite の版も OS の版で変わる（minSdk 24 の端末では古い）。代わりに、アプリのサイズが同梱の SQLite の分だけ増える
+- ログは Kermit を使う。共通のコードから Android の Logcat と iOS の OSLog の両方へ出せるためである（「UI の方針」）
 - 画面遷移は Navigation 3（JetBrains の `navigation3-ui`）を使う。積み重ね（戻る操作で戻れる画面の並び）は、ライブラリではなくアプリが持つリストである
   - 版は Material 3 と同じく、Compose Multiplatform の対応表にあるもの（今は `1.2.0-rc01`）にする。JetBrains 版の `1.2.0` は Compose Multiplatform 1.13.0 の対応表の版なので、Compose Multiplatform を上げるときに一緒に上げる。対応表の3列目（「Navigation3 1.2.0」）は、元にした Google 版の版で、書く版ではない
   - 経路は1つの sealed にする。画面の書き漏れをコンパイルで見つけられ、積み重ねを保存するときに、iOS でも経路の多相の登録（`SerializersModule`）が要らないためである。登録が要るのは、`rememberNavBackStack` で `NavKey` のまま保存するときである
