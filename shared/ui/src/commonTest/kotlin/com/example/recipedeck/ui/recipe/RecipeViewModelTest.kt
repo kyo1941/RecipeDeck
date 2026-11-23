@@ -12,7 +12,6 @@ import com.example.recipedeck.domain.recipe.RecipeId
 import com.example.recipedeck.domain.recipe.RecipeIngredient
 import com.example.recipedeck.domain.recipe.RecipeStatus
 import com.example.recipedeck.usecase.recipe.ShowRecipeResult
-import com.example.recipedeck.usecase.recipe.ShownIngredient
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
@@ -49,7 +48,7 @@ class RecipeViewModelTest {
     private val ginger = Item(ItemId("item-ginger"), notBlank("生姜"))
     private val porkAmount = Amount(Quantity.of(200) ?: fail("数量が作れない"), QuantityNotation.DECIMAL, AmountUnit.GRAM)
 
-    private fun shown(status: RecipeStatus = RecipeStatus.READY, memo: String? = null, ingredients: List<ShownIngredient> = emptyList()) =
+    private fun shown(status: RecipeStatus = RecipeStatus.READY, memo: String? = null, ingredients: List<ShowRecipeResult.Shown.Ingredient> = emptyList()) =
         ShowRecipeResult.Shown(
             recipe = Recipe(
                 id = RecipeId("recipe-1"),
@@ -81,7 +80,7 @@ class RecipeViewModelTest {
 
     @Test
     fun 材料を並びのまま表示名と分量にしメモも持つ() = runTest {
-        val result = shown(memo = "強火で焼く", ingredients = listOf(ShownIngredient(pork, porkAmount), ShownIngredient(ginger, null)))
+        val result = shown(memo = "強火で焼く", ingredients = listOf(ShowRecipeResult.Shown.Ingredient(pork, porkAmount), ShowRecipeResult.Shown.Ingredient(ginger, null)))
         val viewModel = RecipeViewModel(showRecipe = { flowOf(result) })
         subscribe(viewModel)
 

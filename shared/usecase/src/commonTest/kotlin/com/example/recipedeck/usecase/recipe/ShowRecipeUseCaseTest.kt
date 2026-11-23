@@ -45,7 +45,7 @@ class ShowRecipeUseCaseTest {
         val gingerPork = recipe(onion, pork)
         recipeRepository.savedRecipes += gingerPork
 
-        val expected = ShowRecipeResult.Shown(gingerPork, persistentListOf(ShownIngredient(onion, null), ShownIngredient(pork, null)))
+        val expected = ShowRecipeResult.Shown(gingerPork, persistentListOf(ShowRecipeResult.Shown.Ingredient(onion, null), ShowRecipeResult.Shown.Ingredient(pork, null)))
         assertEquals(expected, showRecipe(RecipeId("recipe-1")).first())
     }
 
@@ -89,7 +89,7 @@ class ShowRecipeUseCaseTest {
         val edited = recipe(pork, onion)
         recipeRepository.save(edited)
 
-        val expected = ShowRecipeResult.Shown(edited, persistentListOf(ShownIngredient(pork, null), ShownIngredient(onion, null)))
+        val expected = ShowRecipeResult.Shown(edited, persistentListOf(ShowRecipeResult.Shown.Ingredient(pork, null), ShowRecipeResult.Shown.Ingredient(onion, null)))
         assertEquals(expected, results.last())
     }
 
@@ -105,6 +105,6 @@ class ShowRecipeUseCaseTest {
         val renamed = pork.copy(displayName = notBlankStringOrFail("豚こま肉"))
         itemRepository.save(renamed)
 
-        assertEquals(ShowRecipeResult.Shown(gingerPork, persistentListOf(ShownIngredient(renamed, null))), results.last())
+        assertEquals(ShowRecipeResult.Shown(gingerPork, persistentListOf(ShowRecipeResult.Shown.Ingredient(renamed, null))), results.last())
     }
 }

@@ -45,7 +45,7 @@ class ShowRecipeUseCase(
                 ?: return ShowRecipeResult.Unexpected(
                     IllegalStateException("Recipe ${id.value} の材料が指す Item ${ingredient.itemId.value} が見つからない"),
                 )
-            ShownIngredient(item, ingredient.amount)
+            ShowRecipeResult.Shown.Ingredient(item, ingredient.amount)
         }
         return ShowRecipeResult.Shown(this, ingredients.toImmutableList())
     }
@@ -60,9 +60,9 @@ class ShowRecipeUseCase(
 }
 
 sealed interface ShowRecipeResult {
-    data class Shown(val recipe: Recipe, val ingredients: ImmutableList<ShownIngredient>) : ShowRecipeResult
+    data class Shown(val recipe: Recipe, val ingredients: ImmutableList<Ingredient>) : ShowRecipeResult {
+        data class Ingredient(val item: Item, val amount: Amount?)
+    }
     data object RecipeNoLongerExists : ShowRecipeResult
     data class Unexpected(val cause: Throwable) : ShowRecipeResult
 }
-
-data class ShownIngredient(val item: Item, val amount: Amount?)
