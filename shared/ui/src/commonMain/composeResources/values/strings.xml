@@ -20,4 +20,27 @@
     <string name="amount_unit_kilogram">kg</string>
     <string name="amount_unit_milliliter">ml</string>
     <string name="amount_unit_liter">L</string>
+    <string name="modal_close">×</string>
+    <string name="modal_cancel">キャンセル</string>
+    <string name="recipe_list_create">レシピを作る</string>
+    <string name="recipe_edit">編集</string>
+    <string name="recipe_editor_title_create">レシピを作る</string>
+    <string name="recipe_editor_title_edit">レシピを編集</string>
+    <string name="recipe_editor_save">保存</string>
+    <string name="recipe_editor_name">名前</string>
+    <string name="recipe_editor_name_required">名前を入力してください</string>
+    <string name="recipe_editor_draft">下書き</string>
+    <string name="recipe_editor_ingredients">材料</string>
+    <string name="recipe_editor_ingredient_name">材料名</string>
+    <string name="recipe_editor_ingredient_name_required">分量を入れたときは材料名も入力してください</string>
+    <string name="recipe_editor_quantity">分量</string>
+    <string name="recipe_editor_fraction_slash">/</string>
+    <string name="recipe_editor_unit_none">単位なし</string>
+    <string name="recipe_editor_add_ingredient">＋ 材料を足す</string>
+    <string name="recipe_editor_remove_ingredient">削除</string>
+    <string name="recipe_editor_memo">メモ</string>
+    <string name="recipe_editor_save_failed">保存できませんでした</string>
+    <string name="recipe_editor_discard_title">編集した内容を破棄しますか？</string>
+    <string name="recipe_editor_discard">破棄する</string>
+    <string name="recipe_editor_keep_editing">編集を続ける</string>
 </resources>

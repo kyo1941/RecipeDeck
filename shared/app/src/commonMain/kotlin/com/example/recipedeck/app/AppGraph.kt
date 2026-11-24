@@ -14,6 +14,9 @@ import com.example.recipedeck.domain.recipe.RecipeRepository
 import com.example.recipedeck.domain.shopping.PurchaseRecordRepository
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepository
 import com.example.recipedeck.ui.ScreenViewModels
+import com.example.recipedeck.ui.recipe.CreateRecipeViewModel
+import com.example.recipedeck.ui.recipe.EditRecipeViewModel
+import com.example.recipedeck.ui.recipe.EditRecipeViewModelFactory
 import com.example.recipedeck.ui.recipe.RecipeListViewModel
 import com.example.recipedeck.ui.recipe.RecipeViewModel
 import com.example.recipedeck.ui.recipe.RecipeViewModelFactory
@@ -156,6 +159,21 @@ interface AppGraph : ScreenViewModels {
     @Provides
     fun provideRecipeViewModelFactory(showRecipeUseCase: ShowRecipeUseCase): RecipeViewModelFactory =
         RecipeViewModelFactory { recipeId -> RecipeViewModel(showRecipe = { showRecipeUseCase(recipeId) }) }
+
+    @Provides
+    fun provideCreateRecipeViewModel(createRecipeUseCase: CreateRecipeUseCase): CreateRecipeViewModel =
+        CreateRecipeViewModel(createRecipe = createRecipeUseCase::invoke)
+
+    @Provides
+    fun provideEditRecipeViewModelFactory(
+        showRecipeUseCase: ShowRecipeUseCase,
+        editRecipeUseCase: EditRecipeUseCase,
+    ): EditRecipeViewModelFactory = EditRecipeViewModelFactory { recipeId ->
+        EditRecipeViewModel(
+            showRecipe = { showRecipeUseCase(recipeId) },
+            editRecipe = { name, status, memo, ingredients -> editRecipeUseCase(recipeId, name, status, memo, ingredients) },
+        )
+    }
 
     @Provides
     fun provideRecipeListViewModel(showRecipeListUseCase: ShowRecipeListUseCase): RecipeListViewModel =

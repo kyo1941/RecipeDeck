@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -22,6 +21,7 @@ import com.example.recipedeck.ui.amount.amountText
 import com.example.recipedeck.ui.resources.Res
 import com.example.recipedeck.ui.resources.navigation_back
 import com.example.recipedeck.ui.resources.recipe_draft
+import com.example.recipedeck.ui.resources.recipe_edit
 import com.example.recipedeck.ui.resources.recipe_ingredients
 import com.example.recipedeck.ui.resources.recipe_load_failed
 import com.example.recipedeck.ui.resources.recipe_memo
@@ -29,9 +29,8 @@ import com.example.recipedeck.ui.resources.recipe_no_ingredients
 import com.example.recipedeck.ui.resources.recipe_no_longer_exists
 import org.jetbrains.compose.resources.stringResource
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RecipeScreen(viewModel: RecipeViewModel, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun RecipeScreen(viewModel: RecipeViewModel, onBack: () -> Unit, onEditClick: () -> Unit, modifier: Modifier = Modifier) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -40,6 +39,11 @@ fun RecipeScreen(viewModel: RecipeViewModel, onBack: () -> Unit, modifier: Modif
             TopAppBar(
                 title = { Text((uiState as? RecipeUiState.Shown)?.name.orEmpty()) },
                 navigationIcon = { TextButton(onClick = onBack) { Text(stringResource(Res.string.navigation_back)) } },
+                actions = {
+                    if (uiState is RecipeUiState.Shown) {
+                        TextButton(onClick = onEditClick) { Text(stringResource(Res.string.recipe_edit)) }
+                    }
+                },
             )
         },
     ) { innerPadding ->

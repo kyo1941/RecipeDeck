@@ -25,6 +25,7 @@
   - 経路は1つの sealed にする。画面の書き漏れをコンパイルで見つけられ、積み重ねを保存するときに、iOS でも経路の多相の登録（`SerializersModule`）が要らないためである。登録が要るのは、`rememberNavBackStack` で `NavKey` のまま保存するときである
   - 画面を複数のモジュールに分けるときは、経路を1つの sealed で持つ形を見直す。sealed は同じモジュールの中でしか継げないためである
   - Compose Multiplatform は、iOS の左端のスワイプも、Android の戻る操作と同じ仕組みに流す。OS ごとに振る舞いが違う戻る操作（[画面の構成](spec.md#画面の構成)）は、共通のコードに置くと両方の OS に効くので、OS ごとのソースセットに置く
+  - フッターを覆う全画面のモーダル（[spec.md](spec.md#画面の構成)）は、`DialogSceneStrategy` で別のウィンドウ（`Dialog`）に出す。フッターは `NavDisplay` の外にあるので、`NavDisplay` の中に重ねる形では覆えないためである。`DialogScene` は戻る操作で確かめずに画面を外すので、Dialog の戻る処理は止め、モーダルの中で OS ごとの戻る処理を受ける
 
 未確定：
 

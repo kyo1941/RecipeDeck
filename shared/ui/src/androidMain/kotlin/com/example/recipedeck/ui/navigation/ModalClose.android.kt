@@ -1,0 +1,24 @@
+package com.example.recipedeck.ui.navigation
+
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
+import com.example.recipedeck.ui.resources.Res
+import com.example.recipedeck.ui.resources.modal_close
+import org.jetbrains.compose.resources.stringResource
+
+@Composable
+internal actual fun ModalCloseButton(onCloseRequest: () -> Unit, enabled: Boolean) {
+    TextButton(onClick = onCloseRequest, enabled = enabled) { Text(stringResource(Res.string.modal_close)) }
+}
+
+@Composable
+internal actual fun ModalBackHandler(onCloseRequest: () -> Unit) {
+    NavigationBackHandler(
+        state = rememberNavigationEventState(NavigationEventInfo.None),
+        onBackCompleted = onCloseRequest,
+    )
+}
