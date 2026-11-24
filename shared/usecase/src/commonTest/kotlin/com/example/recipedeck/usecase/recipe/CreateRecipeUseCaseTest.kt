@@ -39,7 +39,7 @@ class CreateRecipeUseCaseTest {
 
     @Test
     fun 指定された名前と状態でRecipeを保存する() = runTest {
-        val result = createRecipe(name = "麻婆豆腐", status = RecipeStatus.READY, ingredients = emptyList())
+        val result = createRecipe(name = "麻婆豆腐", status = RecipeStatus.READY, memo = "", ingredients = emptyList())
 
         val saved = recipeRepository.savedRecipes.single()
         assertEquals(CreateRecipeResult.Created(saved.id, persistentListOf()), result)
@@ -49,15 +49,29 @@ class CreateRecipeUseCaseTest {
     }
 
     @Test
+    fun メモを付けて保存する() = runTest {
+        createRecipe(name = "麻婆豆腐", status = RecipeStatus.READY, memo = "花椒を多めに", ingredients = emptyList())
+
+        assertEquals("花椒を多めに", recipeRepository.savedRecipes.single().memo?.value)
+    }
+
+    @Test
+    fun 空白だけのメモはメモなしとして保存する() = runTest {
+        createRecipe(name = "麻婆豆腐", status = RecipeStatus.READY, memo = " 　\n", ingredients = emptyList())
+
+        assertEquals(null, recipeRepository.savedRecipes.single().memo)
+    }
+
+    @Test
     fun 名前の前後の空白を除いて保存する() = runTest {
-        createRecipe(name = "　麻婆豆腐 \n", status = RecipeStatus.DRAFT, ingredients = emptyList())
+        createRecipe(name = "　麻婆豆腐 \n", status = RecipeStatus.DRAFT, memo = "", ingredients = emptyList())
 
         assertEquals("麻婆豆腐", recipeRepository.savedRecipes.single().name.value)
     }
 
     @Test
     fun 名前が空白だけなら保存せずに失敗を返す() = runTest {
-        val result = createRecipe(name = " 　\n", status = RecipeStatus.DRAFT, ingredients = emptyList())
+        val result = createRecipe(name = " 　\n", status = RecipeStatus.DRAFT, memo = "", ingredients = emptyList())
 
         assertEquals(CreateRecipeResult.NameRequired, result)
         assertEquals(emptyList(), recipeRepository.savedRecipes)
@@ -70,6 +84,7 @@ class CreateRecipeUseCaseTest {
         val result = createRecipe(
             name = "麻婆豆腐",
             status = RecipeStatus.DRAFT,
+            memo = "",
             ingredients = listOf(
                 ingredient(ItemInput.Selected(tofu.id), quantityOrFail(1), AmountUnit.PIECE),
                 ingredient(ItemInput.Typed("長ネギ")),
@@ -92,6 +107,7 @@ class CreateRecipeUseCaseTest {
         val result = createRecipe(
             name = "麻婆豆腐",
             status = RecipeStatus.DRAFT,
+            memo = "",
             ingredients = listOf(
                 ingredient(ItemInput.Typed(" 　"), quantityOrFail(1), AmountUnit.PIECE),
                 ingredient(ItemInput.Typed("長ネギ")),
@@ -112,6 +128,7 @@ class CreateRecipeUseCaseTest {
         val result = createRecipe(
             name = "麻婆豆腐",
             status = RecipeStatus.DRAFT,
+            memo = "",
             ingredients = listOf(ingredient(ItemInput.Typed("長ネギ"))),
         )
 
@@ -128,6 +145,7 @@ class CreateRecipeUseCaseTest {
         val result = createRecipe(
             name = "麻婆豆腐",
             status = RecipeStatus.DRAFT,
+            memo = "",
             ingredients = listOf(ingredient(ItemInput.Typed("長ネギ"))),
         )
 
@@ -144,6 +162,7 @@ class CreateRecipeUseCaseTest {
         val result = createRecipe(
             name = "麻婆豆腐",
             status = RecipeStatus.DRAFT,
+            memo = "",
             ingredients = listOf(ingredient(ItemInput.Typed("長ネギ"))),
         )
 
@@ -159,6 +178,7 @@ class CreateRecipeUseCaseTest {
         val result = createRecipe(
             name = "麻婆豆腐",
             status = RecipeStatus.DRAFT,
+            memo = "",
             ingredients = listOf(ingredient(ItemInput.Typed("長ネギ"))),
         )
 
