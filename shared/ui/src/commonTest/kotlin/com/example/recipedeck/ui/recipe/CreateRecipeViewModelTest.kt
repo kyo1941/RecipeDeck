@@ -4,11 +4,15 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.example.recipedeck.domain.amount.AmountUnit
 import com.example.recipedeck.domain.amount.Quantity
+import com.example.recipedeck.domain.NotBlankString
 import com.example.recipedeck.domain.amount.QuantityNotation
+import com.example.recipedeck.domain.item.Item
+import com.example.recipedeck.domain.item.ItemId
 import com.example.recipedeck.domain.recipe.RecipeId
 import com.example.recipedeck.domain.recipe.RecipeStatus
 import com.example.recipedeck.usecase.ingredient.IngredientInput
 import com.example.recipedeck.usecase.ingredient.ItemInput
+import com.example.recipedeck.usecase.item.SearchItemsResult
 import com.example.recipedeck.usecase.recipe.CreateRecipeResult
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.CompletableDeferred
@@ -45,13 +49,23 @@ class CreateRecipeViewModelTest {
 
     private var created: CreatedRecipe? = null
 
-    private fun viewModel(result: suspend () -> CreateRecipeResult = { CreateRecipeResult.Created(RecipeId("new"), persistentListOf()) }) =
-        CreateRecipeViewModel(
-            createRecipe = { name, status, memo, ingredients ->
-                created = CreatedRecipe(name, status, memo, ingredients)
-                result()
-            },
-        )
+    private fun notBlank(raw: String): NotBlankString = NotBlankString.of(raw) ?: fail("空白になっている")
+
+    private val pork = Item(ItemId("item-pork"), notBlank("豚肉"))
+    private val porkBelly = Item(ItemId("item-pork-belly"), notBlank("豚バラ肉"))
+
+    private fun viewModel(
+        searchItems: suspend (String) -> SearchItemsResult = { SearchItemsResult.Found(persistentListOf()) },
+        result: suspend () -> CreateRecipeResult = { CreateRecipeResult.Created(RecipeId("new"), persistentListOf()) },
+    ) = CreateRecipeViewModel(
+        createRecipe = { name, status, memo, ingredients ->
+            created = CreatedRecipe(name, status, memo, ingredients)
+            result()
+        },
+        searchItems = searchItems,
+    )
+
+    private fun viewModel(result: suspend () -> CreateRecipeResult) = viewModel(searchItems = { SearchItemsResult.Found(persistentListOf()) }, result = result)
 
     private val CreateRecipeViewModel.editor: RecipeEditorUiState
         get() = assertIs<CreateRecipeUiState.Editing>(uiState.value).editor
@@ -290,5 +304,83 @@ class CreateRecipeViewModelTest {
         viewModel.requestClose()
         viewModel.discard()
         assertEquals(CreateRecipeUiState.Closed, viewModel.uiState.value)
+    }
+
+    @Test
+    fun 材料の名前で探したItemをその行の候補にする() = runTest {
+        val keywords = mutableListOf<String>()
+        val viewModel = viewModel(searchItems = { keyword ->
+            keywords += keyword
+            SearchItemsResult.Found(persistentListOf(pork, porkBelly))
+        })
+
+        viewModel.changeIngredientName(viewModel.firstKey, "豚")
+
+        assertEquals(listOf("豚"), keywords)
+        val found = viewModel.editor.shownFoundItems
+        assertEquals(viewModel.firstKey, found?.ingredientKey)
+        assertEquals<List<Item>?>(listOf(pork, porkBelly), found?.items)
+    }
+
+    @Test
+    fun 候補を選ぶとそのItemを使う材料になり候補は消える() = runTest {
+        val viewModel = viewModel(searchItems = { SearchItemsResult.Found(persistentListOf(pork)) })
+        viewModel.changeName("生姜焼き")
+        viewModel.changeIngredientName(viewModel.firstKey, "豚")
+
+        viewModel.selectItem(viewModel.firstKey, pork)
+
+        assertNull(viewModel.editor.shownFoundItems)
+        assertEquals("豚肉", viewModel.editor.form.ingredients.rows.first().ingredient.name)
+        viewModel.save()
+        assertEquals(ItemInput.Selected(pork.id), created?.ingredients?.single()?.item)
+    }
+
+    @Test
+    fun 名前を打ち直したら前の名前の候補は出さない() = runTest {
+        val viewModel = viewModel(searchItems = { keyword ->
+            if (keyword == "豚") SearchItemsResult.Found(persistentListOf(pork)) else CompletableDeferred<SearchItemsResult>().await()
+        })
+        viewModel.changeIngredientName(viewModel.firstKey, "豚")
+
+        viewModel.changeIngredientName(viewModel.firstKey, "豚バ")
+
+        assertNull(viewModel.editor.shownFoundItems)
+    }
+
+    @Test
+    fun 前の名前の検索の結果が後から届いても当てない() = runTest {
+        val slowResult = CompletableDeferred<SearchItemsResult>()
+        val viewModel = viewModel(searchItems = { keyword ->
+            if (keyword == "豚") slowResult.await() else SearchItemsResult.Found(persistentListOf(porkBelly))
+        })
+        viewModel.changeIngredientName(viewModel.firstKey, "豚")
+        viewModel.changeIngredientName(viewModel.firstKey, "豚バ")
+
+        slowResult.complete(SearchItemsResult.Found(persistentListOf(pork)))
+
+        assertEquals<List<Item>?>(listOf(porkBelly), viewModel.editor.shownFoundItems?.items)
+    }
+
+    @Test
+    fun 探せなかったときは候補を出さない() = runTest {
+        val viewModel = viewModel(searchItems = { SearchItemsResult.Unexpected(IllegalStateException("読めない")) })
+
+        viewModel.changeIngredientName(viewModel.firstKey, "豚")
+
+        assertEquals(emptyList(), viewModel.editor.shownFoundItems?.items.orEmpty())
+    }
+
+    @Test
+    fun 保存中は候補を出さない() = runTest {
+        val viewModel = viewModel(
+            searchItems = { SearchItemsResult.Found(persistentListOf(pork)) },
+            result = { CompletableDeferred<CreateRecipeResult>().await() },
+        )
+        viewModel.changeIngredientName(viewModel.firstKey, "豚")
+
+        viewModel.save()
+
+        assertNull(viewModel.editor.shownFoundItems)
     }
 }

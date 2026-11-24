@@ -5,9 +5,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
 import com.example.recipedeck.domain.amount.AmountUnit
+import com.example.recipedeck.domain.item.Item
 import com.example.recipedeck.domain.recipe.RecipeStatus
 import com.example.recipedeck.usecase.ingredient.IngredientInput
+import com.example.recipedeck.usecase.item.SearchItemsResult
 import com.example.recipedeck.usecase.recipe.CreateRecipeResult
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,9 +20,12 @@ import kotlinx.coroutines.launch
 
 class CreateRecipeViewModel(
     private val createRecipe: suspend (name: String, status: RecipeStatus, memo: String, ingredients: List<IngredientInput>) -> CreateRecipeResult,
+    private val searchItems: suspend (keyword: String) -> SearchItemsResult,
 ) : ViewModel(), RecipeEditorActions {
     private val _uiState = MutableStateFlow<CreateRecipeUiState>(CreateRecipeUiState.Editing(RecipeEditorUiState.startingWith(RecipeForm.empty())))
     val uiState: StateFlow<CreateRecipeUiState> = _uiState.asStateFlow()
+
+    private var itemSearchJob: Job? = null
 
     override fun changeName(name: String) = updateForm { it.copy(name = name) }
 
@@ -26,7 +33,31 @@ class CreateRecipeViewModel(
 
     override fun changeMemo(memo: String) = updateForm { it.copy(memo = memo) }
 
-    override fun changeIngredientName(key: Long, name: String) = updateForm { it.withIngredientChanged(key) { ingredient -> ingredient.withName(name) } }
+    override fun changeIngredientName(key: Long, name: String) {
+        updateForm { it.withIngredientChanged(key) { ingredient -> ingredient.withName(name) } }
+        itemSearchJob?.cancel()
+        itemSearchJob = viewModelScope.launch {
+            val items = when (val result = searchItems(name)) {
+                is SearchItemsResult.Found -> result.items
+                is SearchItemsResult.Unexpected -> persistentListOf<Item>().also { logger.e(result.cause) { "材料の名前で Item を探せなかった" } }
+            }
+            _uiState.update { state ->
+                if (state is CreateRecipeUiState.Editing) CreateRecipeUiState.Editing(state.editor.copy(foundItems = FoundItems(key, name, items))) else state
+            }
+        }
+    }
+
+    override fun selectItem(key: Long, item: Item) {
+        itemSearchJob?.cancel()
+        _uiState.update { state ->
+            if (state is CreateRecipeUiState.Editing && state.editor.saveStatus != SaveStatus.Saving) {
+                val form = state.editor.form.withIngredientChanged(key) { it.withItemSelected(item) }
+                CreateRecipeUiState.Editing(state.editor.copy(form = form, foundItems = null))
+            } else {
+                state
+            }
+        }
+    }
 
     override fun changeQuantity(key: Long, quantity: TextFieldValue) =
         updateForm { it.withIngredientChanged(key) { ingredient -> ingredient.withQuantity(quantity) } }

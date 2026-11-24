@@ -3,6 +3,7 @@ package com.example.recipedeck.ui.recipe
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.example.recipedeck.domain.amount.AmountUnit
+import com.example.recipedeck.domain.item.Item
 import com.example.recipedeck.domain.item.ItemId
 import com.example.recipedeck.domain.recipe.RecipeStatus
 import com.example.recipedeck.ui.amount.isAcceptableQuantityText
@@ -85,6 +86,8 @@ data class IngredientForm(
     val unit: AmountUnit?,
 ) {
     fun withName(name: String): IngredientForm = if (name == this.name) this else copy(name = name, selectedItemId = null)
+
+    fun withItemSelected(item: Item): IngredientForm = copy(name = item.displayName.value, selectedItemId = item.id)
 
     fun withQuantity(quantity: TextFieldValue): IngredientForm {
         val accepted = quantity.text.filter { it in QUANTITY_CHARACTERS }

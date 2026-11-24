@@ -1,14 +1,17 @@
 package com.example.recipedeck.ui.recipe
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -17,6 +20,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -30,10 +34,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.recipedeck.domain.amount.AmountUnit
+import com.example.recipedeck.domain.item.Item
 import com.example.recipedeck.ui.CenteredContent
 import com.example.recipedeck.ui.LoadFailedContent
 import com.example.recipedeck.ui.amount.unitText
@@ -62,6 +68,9 @@ import com.example.recipedeck.ui.resources.recipe_editor_unit_none
 import com.example.recipedeck.ui.resources.recipe_load_failed
 import com.example.recipedeck.ui.resources.recipe_no_longer_exists
 import com.example.recipedeck.ui.resources.storage_shortage_hint
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -149,10 +158,12 @@ private fun RecipeEditorForm(editor: RecipeEditorUiState, actions: RecipeEditorA
     // データや保存の規則に関わる状態は ViewModel に置く（閉じるときの確認のダイアログはこちら。「変わっていれば確かめる」をテストで守るため）。
     // フォーカスのように UI の仕組みが持っていて、データに効かない状態は画面に置く。
     // ViewModel にも持つと、キーボードを閉じたときなどの変化を知らせ漏らし、実際のフォーカスとずれるため。
-    // 「/」のボタンを出す行は後者なので、ここで持つ。
+    // 「/」のボタンや Item の候補を出す行は後者なので、ここで持つ。
     var focusedQuantityKey by remember { mutableStateOf<Long?>(null) }
+    var focusedNameKey by remember { mutableStateOf<Long?>(null) }
     val isEditable = editor.saveStatus != SaveStatus.Saving
     val ingredientKeysRequiringName = editor.ingredientKeysRequiringName
+    val shownFoundItems = editor.shownFoundItems
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -199,8 +210,16 @@ private fun RecipeEditorForm(editor: RecipeEditorUiState, actions: RecipeEditorA
                 key = row.key,
                 ingredient = row.ingredient,
                 isNameRequired = row.key in ingredientKeysRequiringName,
+                foundItems = if (focusedNameKey == row.key && shownFoundItems?.ingredientKey == row.key) {
+                    shownFoundItems.items.take(MAX_SHOWN_FOUND_ITEMS).toImmutableList()
+                } else {
+                    persistentListOf()
+                },
                 isQuantityFocused = focusedQuantityKey == row.key,
                 isEditable = isEditable,
+                onNameFocusChange = { focused ->
+                    focusedNameKey = if (focused) row.key else focusedNameKey.takeUnless { it == row.key }
+                },
                 onQuantityFocusChange = { focused ->
                     focusedQuantityKey = if (focused) row.key else focusedQuantityKey.takeUnless { it == row.key }
                 },
@@ -238,25 +257,22 @@ private fun IngredientRow(
     key: Long,
     ingredient: IngredientForm,
     isNameRequired: Boolean,
+    foundItems: ImmutableList<Item>,
     isQuantityFocused: Boolean,
     isEditable: Boolean,
+    onNameFocusChange: (Boolean) -> Unit,
     onQuantityFocusChange: (Boolean) -> Unit,
     actions: RecipeEditorActions,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        OutlinedTextField(
-            value = ingredient.name,
-            onValueChange = { actions.changeIngredientName(key, it) },
-            enabled = isEditable,
-            label = { Text(stringResource(Res.string.recipe_editor_ingredient_name)) },
-            isError = isNameRequired,
-            supportingText = if (isNameRequired) {
-                { Text(stringResource(Res.string.recipe_editor_ingredient_name_required)) }
-            } else {
-                null
-            },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
+        IngredientNameField(
+            name = ingredient.name,
+            foundItems = foundItems,
+            isNameRequired = isNameRequired,
+            isEditable = isEditable,
+            onNameChange = { actions.changeIngredientName(key, it) },
+            onItemSelect = { actions.selectItem(key, it) },
+            onFocusChange = onNameFocusChange,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
@@ -276,6 +292,47 @@ private fun IngredientRow(
             UnitSelector(unit = ingredient.unit, enabled = isEditable, onUnitChange = { actions.changeUnit(key, it) })
             TextButton(onClick = { actions.removeIngredient(key) }, enabled = isEditable) {
                 Text(stringResource(Res.string.recipe_editor_remove_ingredient))
+            }
+        }
+    }
+}
+
+@Composable
+private fun IngredientNameField(
+    name: String,
+    foundItems: ImmutableList<Item>,
+    isNameRequired: Boolean,
+    isEditable: Boolean,
+    onNameChange: (String) -> Unit,
+    onItemSelect: (Item) -> Unit,
+    onFocusChange: (Boolean) -> Unit,
+) {
+    Column {
+        OutlinedTextField(
+            value = name,
+            onValueChange = onNameChange,
+            enabled = isEditable,
+            label = { Text(stringResource(Res.string.recipe_editor_ingredient_name)) },
+            isError = isNameRequired,
+            supportingText = if (isNameRequired) {
+                { Text(stringResource(Res.string.recipe_editor_ingredient_name_required)) }
+            } else {
+                null
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+            modifier = Modifier.fillMaxWidth().onFocusChanged { onFocusChange(it.isFocused) },
+        )
+        // 候補を欄の上に重ねると、すぐ下の数量の欄を覆って押せなくなるので、欄の下に差し込む。
+        if (foundItems.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(FOUND_ITEMS_BAND_HEIGHT).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                foundItems.forEach { item ->
+                    SuggestionChip(onClick = { onItemSelect(item) }, label = { Text(item.displayName.value) })
+                }
             }
         }
     }
@@ -302,3 +359,6 @@ private fun UnitSelector(unit: AmountUnit?, enabled: Boolean, onUnitChange: (Amo
 
 @Composable
 private fun unitLabel(unit: AmountUnit?): String = unit?.let { unitText(it) } ?: stringResource(Res.string.recipe_editor_unit_none)
+
+private const val MAX_SHOWN_FOUND_ITEMS = 5
+private val FOUND_ITEMS_BAND_HEIGHT = 48.dp

@@ -355,6 +355,8 @@ AI の応答が遅い場合や利用しない場合は、該当 UseCase への�
   - iOS：左端のスワイプは、タブの中で積んだ画面を戻るだけで、タブは移らない（[interactivePopGestureRecognizer](https://developer.apple.com/documentation/uikit/uinavigationcontroller/interactivepopgesturerecognizer) はナビゲーションの積み重ねを戻す。[HIG の Tab bars](https://developer.apple.com/design/human-interface-guidelines/tab-bars) では、タブはアプリの最上位の区分で、それぞれの状態を保つ）。iOS では戻る操作でアプリを閉じることはなく、アプリが自分を終わらせる API もない（[QA1561](https://developer.apple.com/library/archive/qa/qa1561/_index.html)）。全画面のモーダルは、左端のスワイプでは閉じず、上部の「キャンセル」で閉じる
 - Recipe の一覧には、下書きも含めてすべての Recipe を出す。1行の中身、並び、下書きの見せ方は仮で、画面を見ながら決める
 - 読み込みに失敗した画面には、再試行の導線を置く
+- Recipe の作成・編集で材料の名前を打っている間は、表示名の部分一致で探した既存の Item（[Item](#item)）を、候補として出す。候補を選べばその Item を使い、選ばずに保存すれば、打った名前で今までどおり保存する
+  - 探せなかったときは候補を出さず、利用者にも知らせない。候補は入力を助けるためのもので、なくても保存の規則は変わらないため
 - 保存に失敗したときは、モーダルを閉じずに入力を残し、失敗を伝える
 - 読み込みや保存の失敗の文言には、端末の空き容量が足りない場合の対処（空き容量を増やしてからもう一度試す）を含める。空き容量の不足は、ほかの失敗と見分けずに伝える
 

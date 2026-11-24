@@ -15,6 +15,7 @@ import com.example.recipedeck.domain.recipe.RecipeIngredient
 import com.example.recipedeck.domain.recipe.RecipeStatus
 import com.example.recipedeck.usecase.ingredient.IngredientInput
 import com.example.recipedeck.usecase.ingredient.ItemInput
+import com.example.recipedeck.usecase.item.SearchItemsResult
 import com.example.recipedeck.usecase.recipe.EditRecipeResult
 import com.example.recipedeck.usecase.recipe.ShowRecipeResult
 import kotlinx.collections.immutable.persistentListOf
@@ -69,12 +70,14 @@ class EditRecipeViewModelTest {
     private fun viewModel(
         shown: () -> Flow<ShowRecipeResult> = { flowOf(gingerPork) },
         result: EditRecipeResult = EditRecipeResult.Saved(persistentListOf()),
+        searchItems: suspend (String) -> SearchItemsResult = { SearchItemsResult.Found(persistentListOf()) },
     ) = EditRecipeViewModel(
         showRecipe = shown,
         editRecipe = { _, _, _, ingredients ->
             editedIngredients = ingredients
             result
         },
+        searchItems = searchItems,
     )
 
     private val EditRecipeViewModel.editor: RecipeEditorUiState
@@ -210,5 +213,18 @@ class EditRecipeViewModelTest {
         viewModel.requestClose()
 
         assertTrue(viewModel.editor.showsDiscardConfirmation)
+    }
+
+    @Test
+    fun Itemを選んであった材料の名前を打ち直しても候補から元のItemに戻せる() = runTest {
+        val viewModel = viewModel(searchItems = { SearchItemsResult.Found(persistentListOf(pork)) })
+        viewModel.changeIngredientName(viewModel.firstKey, "豚")
+        assertEquals<List<Item>?>(listOf(pork), viewModel.editor.shownFoundItems?.items)
+
+        viewModel.selectItem(viewModel.firstKey, pork)
+
+        assertEquals(pork.id, viewModel.editor.form.ingredients.rows.single().ingredient.selectedItemId)
+        viewModel.save()
+        assertEquals(ItemInput.Selected(pork.id), editedIngredients?.single()?.item)
     }
 }

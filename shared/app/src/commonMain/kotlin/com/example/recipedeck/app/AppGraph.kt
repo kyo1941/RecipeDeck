@@ -161,17 +161,24 @@ interface AppGraph : ScreenViewModels {
         RecipeViewModelFactory { recipeId -> RecipeViewModel(showRecipe = { showRecipeUseCase(recipeId) }) }
 
     @Provides
-    fun provideCreateRecipeViewModel(createRecipeUseCase: CreateRecipeUseCase): CreateRecipeViewModel =
-        CreateRecipeViewModel(createRecipe = createRecipeUseCase::invoke)
+    fun provideCreateRecipeViewModel(
+        createRecipeUseCase: CreateRecipeUseCase,
+        searchItemsUseCase: SearchItemsUseCase,
+    ): CreateRecipeViewModel = CreateRecipeViewModel(
+        createRecipe = createRecipeUseCase::invoke,
+        searchItems = searchItemsUseCase::invoke,
+    )
 
     @Provides
     fun provideEditRecipeViewModelFactory(
         showRecipeUseCase: ShowRecipeUseCase,
         editRecipeUseCase: EditRecipeUseCase,
+        searchItemsUseCase: SearchItemsUseCase,
     ): EditRecipeViewModelFactory = EditRecipeViewModelFactory { recipeId ->
         EditRecipeViewModel(
             showRecipe = { showRecipeUseCase(recipeId) },
             editRecipe = { name, status, memo, ingredients -> editRecipeUseCase(recipeId, name, status, memo, ingredients) },
+            searchItems = searchItemsUseCase::invoke,
         )
     }
 
