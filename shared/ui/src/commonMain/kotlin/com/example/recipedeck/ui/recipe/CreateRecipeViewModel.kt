@@ -32,8 +32,7 @@ class CreateRecipeViewModel(
 
     init {
         viewModelScope.launch {
-            val leftover = leftoverEditKeeper.read()
-            if (leftover != null) {
+            leftoverEditKeeper.read()?.let { leftover ->
                 _uiState.update { state ->
                     if (state !is CreateRecipeUiState.Editing) return@update state
                     val editor = state.editor
