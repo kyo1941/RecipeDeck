@@ -125,14 +125,14 @@ class CreateRecipeViewModel(
 
     override fun requestClose() {
         val editor = (_uiState.value as? CreateRecipeUiState.Editing)?.editor ?: return
-        when {
-            editor.saveStatus == SaveStatus.Saving -> Unit
-            editor.hasUnsavedChanges -> _uiState.value = CreateRecipeUiState.Editing(editor.copy(isCloseRequested = true))
-            else -> {
-                _uiState.value = CreateRecipeUiState.Closed
-                leftoverEditKeeper.stopSaving()
-                if (editor.offeredLeftover == null) leftoverEditKeeper.delete(viewModelScope)
-            }
+        if (editor.saveStatus == SaveStatus.Saving) return
+        val requested = editor.copy(isCloseRequested = true)
+        if (requested.showsDiscardConfirmation) {
+            _uiState.value = CreateRecipeUiState.Editing(requested)
+        } else {
+            _uiState.value = CreateRecipeUiState.Closed
+            leftoverEditKeeper.stopSaving()
+            if (editor.offeredLeftover == null) leftoverEditKeeper.delete(viewModelScope)
         }
     }
 
