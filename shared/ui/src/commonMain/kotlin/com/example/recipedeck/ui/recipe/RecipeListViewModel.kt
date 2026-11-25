@@ -18,9 +18,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 class RecipeListViewModel(
     showRecipeList: () -> Flow<ShowRecipeListResult>,
+    private val leftoverEdits: LeftoverRecipeEditStore,
 ) : ViewModel() {
     private val retryRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
@@ -31,6 +33,14 @@ class RecipeListViewModel(
         .onEach { if (it is ShowRecipeListResult.Unexpected) logger.e(it.cause) { "Recipe の一覧を読み込めなかった" } }
         .map { it.toUiState() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), RecipeListUiState.Loading)
+
+    val hasLeftoverNewRecipe: StateFlow<Boolean> = leftoverEdits.leftoverEdit(LeftoverRecipeEditKey.NewRecipe)
+        .map { it != null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), false)
+
+    fun discardLeftoverNewRecipe() {
+        viewModelScope.launch { leftoverEdits.delete(LeftoverRecipeEditKey.NewRecipe) }
+    }
 
     fun retry() {
         retryRequests.tryEmit(Unit)

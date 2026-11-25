@@ -19,6 +19,7 @@
 - 画面の部品は Material 3 を使う。版は Compose Multiplatform の対応表にあるもの（今は `1.12.0-alpha03`）にする。対応表の Material 3 は alpha だが、API が変わって困るのは版を上げるときだけで、版は固定している。使っていて不具合に当たったら、別の版を検討する
 - Android と iOS のローカルの保存は Room 3（`androidx.room3`）を使う。Room 2 系（`androidx.room`）も KMP に対応しているが、Room 3 はドライバ（`SQLiteDriver`）を必須にして、Android だけの古い経路（SupportSQLite）を外した。そのため、Android と iOS で同じコードの経路を通しやすい。コードの生成には KSP を使う
   - ドライバは、Android・iOS とも、アプリに同梱する SQLite（`BundledSQLiteDriver`）を使う。OS の SQLite を使うドライバ（`AndroidSQLiteDriver`）では、Room 2 と同じく、トランザクションをスレッドに縛る Android だけの経路になり（「データ層の方針」）、SQLite の版も OS の版で変わる（minSdk 24 の端末では古い）。代わりに、アプリのサイズが同梱の SQLite の分だけ増える
+- 残った編集（「UI の方針」）は、型付きの DataStore（`datastore-core-okio`）に JSON で書く。版は 1.2.1
 - ログは Kermit を使う。共通のコードから Android の Logcat と iOS の OSLog の両方へ出せるためである（「UI の方針」）
 - 画面遷移は Navigation 3（JetBrains の `navigation3-ui`）を使う。積み重ね（戻る操作で戻れる画面の並び）は、ライブラリではなくアプリが持つリストである
   - 版は Material 3 と同じく、Compose Multiplatform の対応表にあるもの（今は `1.2.0-rc01`）にする。JetBrains 版の `1.2.0` は Compose Multiplatform 1.13.0 の対応表の版なので、Compose Multiplatform を上げるときに一緒に上げる。対応表の3列目（「Navigation3 1.2.0」）は、元にした Google 版の版で、書く版ではない
@@ -40,7 +41,7 @@
 | `:shared:usecase` | UseCase の KMP モジュール。`:shared:domain` に依存し、ターゲットも同じ。パッケージは `ingredient` / `item` / `recipe` / `shopping`。`ingredient` には、Recipe と Session の両方で使う材料の入力を置く |
 | `:shared:data` | データ層の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:domain` に依存し、Repository と `TransactionRunner` の具象、製品のデータベースの作り方を置く。Room は `api` で公開する（下の段落） |
 | `:shared:ui` | 画面の KMP モジュール。ターゲットは Android・iosArm64・iosSimulatorArm64。`:shared:usecase` に依存し、画面と ViewModel を置く |
-| `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui`・`:shared:usecase`・`:shared:data` に依存し、DI の組み立てを持つ。アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
+| `:shared:app` | アプリを組み立てる KMP モジュール。ターゲットは `:shared:ui` と同じ。`:shared:ui`・`:shared:usecase`・`:shared:data` に依存し、DI の組み立てと、残った編集の DataStore の具象を持つ。アプリの入口（`:androidApp`・`iosApp`）はこのモジュールに依存する。iOS 向けの framework（`Shared`）もここから作る |
 | `iosApp` | iOS アプリの入口。Gradle のモジュールではなく Xcode のプロジェクトで、`:shared:app` の framework を組み込み、その画面を表示する |
 
 DI の組み立てを `:shared:ui` ではなく `:shared:app` に置くのは、データ層の具象（`:shared:data`）を組み立てる側が知る必要があるためである。`:shared:ui` に置くと、画面や ViewModel のコードからもデータ層の具象が見えてしまう。分ければ、`:shared:ui` は `:shared:usecase` にしか依存しないので、UI からデータ層の具象を使うとビルドが落ちる。
@@ -288,6 +289,10 @@ erDiagram
   - `SavedStateHandle` を使わないのは、iOS ではアプリが終わると中身が消えるためである。Compose Multiplatform 1.12.2 の iOS は、保存した状態を `ComposeContainer` の中の変数に置くだけで、ファイルにも UIKit の state restoration にもつながらず、外から保存した状態を渡す口もない（`ComposeContainer.ios.kt`）
   - 購入の記録で DataStore を採らなかった理由（Session と同じトランザクションに入れられない。「データ層の方針」）は、残った編集には当たらない。Recipe の保存と同じトランザクションに入れる必要がないためである
   - 編集中の入力は、名前・メモ・材料の行の並びという1つのまとまりなので、`@Serializable` のクラスにして kotlinx.serialization で書き読みする。Preferences DataStore は、キーと単純な値の組を持つ形なので使わない
+  - 残った編集の型と書き読みの口（`LeftoverRecipeEditStore`）は `:shared:ui` に置き、DataStore の具象とファイルの場所は `:shared:app` に置く。中身は入力欄の値そのもの（数量は打った文字のまま）で、使うのは画面だけなので、domain や usecase に下ろさない。`:shared:data` は `:shared:domain` にしか依存しないので、この型を知らない。ViewModel は口を直接受け取り、UseCase を挟まない。UseCase は製品の規則を持つ場所で、残った編集には守る規則がないためである
+  - DataStore は1つのファイルで、キーから残った編集を引く表を持つ。Recipe ごとにファイルを分けると、DataStore のインスタンスを開いたり閉じたりする管理が要るためである
+  - 開いたときに残った編集を読み、ViewModel が持って帯で示す。入力欄はいつもどおり打て、書く側も同じキーへいつもどおり書くので、選ぶ前に打てば保存先は打った分で上書きされる。反映は ViewModel が持っている残った編集で入力を置き換え、破棄は帯を消す。選ぶ前にダイアログで止める形や、選ぶまで書かない形は、残った編集がアプリが途中で終わった後にしか起きないのに対して、作るものが多い
+  - 読み書きに失敗したら、ログを残し、残った編集がないものとして続ける。編集と保存はそのままできるためである。ファイルが壊れていたら空にする
 - グラフはプロセスに1つにする。Activity の中で作ると、画面の回転で2つ目のグラフとデータベースができ、生き残った ViewModel は古い方を使い続ける。Android は `RecipeDeckApplication` で持ち、iOS は `:shared:app` の `iosMain` のトップレベルで持つ
 - 表示し続ける画面（Recipe の一覧、買い物リスト）は、UseCase が返す `Flow` を購読し、結果が流れるたびに表示を置き換える。ViewModel に「保存したら読み直す」のような技術上の処理を持たせないためである。どの画面で保存しても、監視している画面に届く
   - 読み込み中の表示は最初の1回だけにする。読み直しの間は今の表示を残し、終わったら結果で置き換える。失敗したら前の表示を残さず、失敗の状態にする（変換は結果と入力だけから UiState を作る、による）

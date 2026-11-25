@@ -46,6 +46,8 @@ import com.example.recipedeck.ui.amount.unitText
 import com.example.recipedeck.ui.navigation.ModalBackHandler
 import com.example.recipedeck.ui.navigation.ModalCloseButton
 import com.example.recipedeck.ui.resources.Res
+import com.example.recipedeck.ui.resources.leftover_edit
+import com.example.recipedeck.ui.resources.leftover_reflect
 import com.example.recipedeck.ui.resources.recipe_editor_add_ingredient
 import com.example.recipedeck.ui.resources.recipe_editor_discard
 import com.example.recipedeck.ui.resources.recipe_editor_discard_title
@@ -169,6 +171,17 @@ private fun RecipeEditorForm(editor: RecipeEditorUiState, actions: RecipeEditorA
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (editor.offeredLeftover != null) {
+            item {
+                LeftoverEditBanner(
+                    message = stringResource(Res.string.leftover_edit),
+                    useLabel = stringResource(Res.string.leftover_reflect),
+                    onUse = actions::reflectLeftover,
+                    onDiscard = actions::discardLeftover,
+                    enabled = isEditable,
+                )
+            }
+        }
         if (editor.saveStatus == SaveStatus.Failed) {
             item { SaveFailedMessage() }
         }

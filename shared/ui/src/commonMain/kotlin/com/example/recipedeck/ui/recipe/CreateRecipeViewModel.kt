@@ -15,17 +15,35 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class CreateRecipeViewModel(
     private val createRecipe: suspend (name: String, status: RecipeStatus, memo: String, ingredients: List<IngredientInput>) -> CreateRecipeResult,
     private val searchItems: suspend (keyword: String) -> SearchItemsResult,
+    private val leftoverEditKeeper: LeftoverRecipeEditKeeper,
+    resumesLeftover: Boolean,
 ) : ViewModel(), RecipeEditorActions {
     private val _uiState = MutableStateFlow<CreateRecipeUiState>(CreateRecipeUiState.Editing(RecipeEditorUiState.startingWith(RecipeForm.empty())))
     val uiState: StateFlow<CreateRecipeUiState> = _uiState.asStateFlow()
 
     private var itemSearchJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            val leftover = leftoverEditKeeper.read()
+            if (leftover != null) {
+                _uiState.update { state ->
+                    if (state !is CreateRecipeUiState.Editing) return@update state
+                    val editor = state.editor
+                    val resumes = resumesLeftover && editor.form.hasSameContentAs(editor.initialForm)
+                    CreateRecipeUiState.Editing(if (resumes) editor.copy(form = leftover) else editor.copy(offeredLeftover = leftover))
+                }
+            }
+            leftoverEditKeeper.keepSaving(viewModelScope, _uiState.mapNotNull { (it as? CreateRecipeUiState.Editing)?.editor })
+        }
+    }
 
     override fun changeName(name: String) = updateForm { it.copy(name = name) }
 
@@ -70,6 +88,20 @@ class CreateRecipeViewModel(
 
     override fun removeIngredient(key: Long) = updateForm { it.withIngredientRemoved(key) }
 
+    override fun reflectLeftover() {
+        _uiState.update { state ->
+            val editor = (state as? CreateRecipeUiState.Editing)?.editor
+            val leftover = editor?.offeredLeftover
+            if (leftover == null || editor.saveStatus == SaveStatus.Saving) state else CreateRecipeUiState.Editing(editor.copy(form = leftover, offeredLeftover = null))
+        }
+    }
+
+    override fun discardLeftover() {
+        val editor = (_uiState.value as? CreateRecipeUiState.Editing)?.editor ?: return
+        _uiState.value = CreateRecipeUiState.Editing(editor.copy(offeredLeftover = null))
+        if (!editor.hasUnsavedChanges) leftoverEditKeeper.delete(viewModelScope)
+    }
+
     override fun save() {
         val editor = (_uiState.value as? CreateRecipeUiState.Editing)?.editor?.takeUnless { it.saveStatus == SaveStatus.Saving } ?: return
         val saving = editor.copy(isSaveRequested = true, saveStatus = SaveStatus.Saving)
@@ -84,6 +116,10 @@ class CreateRecipeViewModel(
                     .also { logger.e(result.cause) { "Recipe を作成できなかった" } }
             }
             _uiState.update { current -> if ((current as? CreateRecipeUiState.Editing)?.editor?.saveStatus == SaveStatus.Saving) next else current }
+            if (_uiState.value == CreateRecipeUiState.Closed) {
+                leftoverEditKeeper.stopSaving()
+                leftoverEditKeeper.delete(viewModelScope)
+            }
         }
     }
 
@@ -92,12 +128,18 @@ class CreateRecipeViewModel(
         when {
             editor.saveStatus == SaveStatus.Saving -> Unit
             editor.hasUnsavedChanges -> _uiState.value = CreateRecipeUiState.Editing(editor.copy(isCloseRequested = true))
-            else -> _uiState.value = CreateRecipeUiState.Closed
+            else -> {
+                _uiState.value = CreateRecipeUiState.Closed
+                leftoverEditKeeper.stopSaving()
+                if (editor.offeredLeftover == null) leftoverEditKeeper.delete(viewModelScope)
+            }
         }
     }
 
     override fun discard() {
         _uiState.value = CreateRecipeUiState.Closed
+        leftoverEditKeeper.stopSaving()
+        leftoverEditKeeper.delete(viewModelScope)
     }
 
     override fun keepEditing() {
@@ -119,6 +161,10 @@ class CreateRecipeViewModel(
     private companion object {
         val logger = Logger.withTag("CreateRecipeViewModel")
     }
+}
+
+fun interface CreateRecipeViewModelFactory {
+    fun create(resumesLeftover: Boolean): CreateRecipeViewModel
 }
 
 sealed interface CreateRecipeUiState {

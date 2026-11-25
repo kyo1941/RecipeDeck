@@ -78,7 +78,11 @@ class EditRecipeViewModelTest {
             result
         },
         searchItems = searchItems,
+        leftoverEditKeeper = LeftoverRecipeEditKeeper(leftoverEdits, leftoverKey),
     )
+
+    private val leftoverKey = LeftoverRecipeEditKey.OfRecipe(RecipeId("recipe-1"))
+    private val leftoverEdits = FakeLeftoverRecipeEditStore()
 
     private val EditRecipeViewModel.editor: RecipeEditorUiState
         get() = assertIs<EditRecipeUiState.Editing>(uiState.value).editor
@@ -226,5 +230,25 @@ class EditRecipeViewModelTest {
         assertEquals(pork.id, viewModel.editor.form.ingredients.rows.single().ingredient.selectedItemId)
         viewModel.save()
         assertEquals(ItemInput.Selected(pork.id), editedIngredients?.single()?.item)
+    }
+
+    @Test
+    fun 残った編集があれば示す() = runTest {
+        val leftover = RecipeForm.of(gingerPork).copy(name = "途中の生姜焼き").toLeftoverEdit()
+        leftoverEdits.save(leftoverKey, leftover)
+
+        val viewModel = viewModel()
+
+        assertEquals("生姜焼き", viewModel.editor.form.name)
+        assertEquals("途中の生姜焼き", viewModel.editor.offeredLeftover?.name)
+    }
+
+    @Test
+    fun Recipeが見つからなければ残った編集を消す() = runTest {
+        leftoverEdits.save(leftoverKey, RecipeForm.of(gingerPork).toLeftoverEdit())
+
+        viewModel(shown = { flowOf(ShowRecipeResult.RecipeNoLongerExists) })
+
+        assertEquals(emptyMap(), leftoverEdits.edits.value)
     }
 }

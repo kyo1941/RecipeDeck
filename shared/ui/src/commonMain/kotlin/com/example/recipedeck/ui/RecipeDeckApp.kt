@@ -51,7 +51,8 @@ private fun screenOf(route: Route, viewModels: ScreenViewModels, navigation: Rec
         RecipeListScreen(
             viewModel = viewModel { viewModels.recipeListViewModel },
             onRecipeClick = { recipeId -> navigation.open(Route.Recipe(recipeId.value)) },
-            onCreateRecipeClick = { navigation.open(Route.CreateRecipe) },
+            onCreateRecipeClick = { navigation.open(Route.CreateRecipe()) },
+            onResumeLeftoverClick = { navigation.open(Route.CreateRecipe(resumesLeftover = true)) },
         )
     }
     Route.ShoppingList -> NavEntry(route) { ShoppingListScreen(viewModel { viewModels.shoppingListViewModel }) }
@@ -62,8 +63,11 @@ private fun screenOf(route: Route, viewModels: ScreenViewModels, navigation: Rec
             onEditClick = { navigation.open(Route.EditRecipe(route.recipeId)) },
         )
     }
-    Route.CreateRecipe -> NavEntry(route, metadata = DialogSceneStrategy.dialog(FullScreenModalProperties)) {
-        CreateRecipeScreen(viewModel = viewModel { viewModels.createRecipeViewModel }, onClosed = navigation::goBack)
+    is Route.CreateRecipe -> NavEntry(route, metadata = DialogSceneStrategy.dialog(FullScreenModalProperties)) {
+        CreateRecipeScreen(
+            viewModel = viewModel { viewModels.createRecipeViewModelFactory.create(route.resumesLeftover) },
+            onClosed = navigation::goBack,
+        )
     }
     is Route.EditRecipe -> NavEntry(route, metadata = DialogSceneStrategy.dialog(FullScreenModalProperties)) {
         EditRecipeScreen(

@@ -31,6 +31,13 @@ data class RecipeForm(
 
     fun withIngredientRemoved(key: Long): RecipeForm = copy(ingredients = ingredients.removed(key))
 
+    fun toLeftoverEdit() = LeftoverRecipeEdit(
+        name = name,
+        isDraft = isDraft,
+        memo = memo,
+        ingredients = ingredients.rows.map { it.ingredient.toLeftoverEdit() },
+    )
+
     fun hasSameContentAs(other: RecipeForm): Boolean =
         name == other.name &&
             isDraft == other.isDraft &&
@@ -45,6 +52,13 @@ data class RecipeForm(
             isDraft = shown.recipe.status == RecipeStatus.DRAFT,
             memo = shown.recipe.memo?.value.orEmpty(),
             ingredients = IngredientListForm.of(shown.ingredients.map(IngredientForm::of)),
+        )
+
+        fun of(leftover: LeftoverRecipeEdit) = RecipeForm(
+            name = leftover.name,
+            isDraft = leftover.isDraft,
+            memo = leftover.memo,
+            ingredients = IngredientListForm.of(leftover.ingredients.map(IngredientForm::of)),
         )
     }
 }
@@ -112,6 +126,13 @@ data class IngredientForm(
         unit = unit,
     )
 
+    fun toLeftoverEdit() = LeftoverRecipeEdit.Ingredient(
+        name = name,
+        selectedItemId = selectedItemId?.value,
+        quantity = quantity.text,
+        unit = unit,
+    )
+
     fun hasSameContentAs(other: IngredientForm): Boolean =
         name == other.name && selectedItemId == other.selectedItemId && quantity.text == other.quantity.text && unit == other.unit
 
@@ -125,6 +146,13 @@ data class IngredientForm(
             selectedItemId = shown.item.id,
             quantity = TextFieldValue(shown.amount?.let { it.quantity.text(it.notation) }.orEmpty()),
             unit = shown.amount?.unit,
+        )
+
+        fun of(leftover: LeftoverRecipeEdit.Ingredient) = IngredientForm(
+            name = leftover.name,
+            selectedItemId = leftover.selectedItemId?.let(::ItemId),
+            quantity = TextFieldValue(leftover.quantity),
+            unit = leftover.unit,
         )
     }
 }

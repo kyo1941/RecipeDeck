@@ -20,6 +20,8 @@ interface RecipeEditorActions {
     fun changeUnit(key: Long, unit: AmountUnit?)
     fun addIngredient()
     fun removeIngredient(key: Long)
+    fun reflectLeftover()
+    fun discardLeftover()
     fun save()
     fun requestClose()
     fun discard()
@@ -33,6 +35,7 @@ data class RecipeEditorUiState(
     val isCloseRequested: Boolean = false,
     val saveStatus: SaveStatus = SaveStatus.Idle,
     val foundItems: FoundItems? = null,
+    val offeredLeftover: RecipeForm? = null,
 ) {
     val hasUnsavedChanges: Boolean get() = !form.hasSameContentAs(initialForm)
 

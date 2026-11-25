@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.metro)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -33,6 +34,9 @@ kotlin {
             implementation(project(":shared:usecase"))
             implementation(project(":shared:data"))
             implementation(libs.compose.runtime)
+            implementation(libs.androidx.datastore.core.okio)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.kermit)
         }
         iosMain.dependencies {
             implementation(libs.compose.ui)

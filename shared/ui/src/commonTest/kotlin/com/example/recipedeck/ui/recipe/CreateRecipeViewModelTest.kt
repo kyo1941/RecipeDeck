@@ -19,6 +19,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -54,8 +55,21 @@ class CreateRecipeViewModelTest {
     private val pork = Item(ItemId("item-pork"), notBlank("豚肉"))
     private val porkBelly = Item(ItemId("item-pork-belly"), notBlank("豚バラ肉"))
 
+    private val leftoverEdits = FakeLeftoverRecipeEditStore()
+
+    private val storedLeftover: LeftoverRecipeEdit?
+        get() = leftoverEdits.edits.value[LeftoverRecipeEditKey.NewRecipe]
+
+    private val leftover = LeftoverRecipeEdit(
+        name = "途中の生姜焼き",
+        isDraft = true,
+        memo = "",
+        ingredients = listOf(LeftoverRecipeEdit.Ingredient(name = "豚肉", selectedItemId = "item-pork", quantity = "1/2", unit = AmountUnit.PIECE)),
+    )
+
     private fun viewModel(
         searchItems: suspend (String) -> SearchItemsResult = { SearchItemsResult.Found(persistentListOf()) },
+        resumesLeftover: Boolean = false,
         result: suspend () -> CreateRecipeResult = { CreateRecipeResult.Created(RecipeId("new"), persistentListOf()) },
     ) = CreateRecipeViewModel(
         createRecipe = { name, status, memo, ingredients ->
@@ -63,6 +77,8 @@ class CreateRecipeViewModelTest {
             result()
         },
         searchItems = searchItems,
+        leftoverEditKeeper = LeftoverRecipeEditKeeper(leftoverEdits, LeftoverRecipeEditKey.NewRecipe),
+        resumesLeftover = resumesLeftover,
     )
 
     private fun viewModel(result: suspend () -> CreateRecipeResult) = viewModel(searchItems = { SearchItemsResult.Found(persistentListOf()) }, result = result)
@@ -382,5 +398,114 @@ class CreateRecipeViewModelTest {
         viewModel.save()
 
         assertNull(viewModel.editor.shownFoundItems)
+    }
+
+    @Test
+    fun 入力が変わってから1秒たつと残った編集に書く() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.changeName("生姜焼き")
+        advanceTimeBy(999)
+        assertNull(storedLeftover)
+        advanceTimeBy(2)
+
+        assertEquals("生姜焼き", storedLeftover?.name)
+    }
+
+    @Test
+    fun 開いたときの入力に戻すと残った編集を消す() = runTest {
+        val viewModel = viewModel()
+        viewModel.changeName("生姜焼き")
+        advanceTimeBy(1_001)
+
+        viewModel.changeName("")
+        advanceTimeBy(1_001)
+
+        assertNull(storedLeftover)
+    }
+
+    @Test
+    fun 保存できたら残った編集を消す() = runTest {
+        val viewModel = viewModel()
+        viewModel.changeName("生姜焼き")
+        advanceTimeBy(1_001)
+
+        viewModel.save()
+
+        assertNull(storedLeftover)
+    }
+
+    @Test
+    fun 入力を捨てて閉じたら残った編集を消す() = runTest {
+        val viewModel = viewModel()
+        viewModel.changeName("生姜焼き")
+        advanceTimeBy(1_001)
+
+        viewModel.requestClose()
+        viewModel.discard()
+        advanceTimeBy(1_001)
+
+        assertNull(storedLeftover)
+    }
+
+    @Test
+    fun 残った編集があれば示し反映すると入力がそれになる() = runTest {
+        leftoverEdits.save(LeftoverRecipeEditKey.NewRecipe, leftover)
+        val viewModel = viewModel()
+        assertEquals("", viewModel.editor.form.name)
+        assertEquals("途中の生姜焼き", viewModel.editor.offeredLeftover?.name)
+
+        viewModel.reflectLeftover()
+
+        assertNull(viewModel.editor.offeredLeftover)
+        val ingredient = viewModel.editor.form.ingredients.rows.single().ingredient
+        assertEquals("途中の生姜焼き", viewModel.editor.form.name)
+        assertEquals(ItemId("item-pork"), ingredient.selectedItemId)
+        assertEquals("1/2", ingredient.quantity.text)
+        assertTrue(viewModel.editor.hasUnsavedChanges)
+    }
+
+    @Test
+    fun 一覧から続けると残った編集を反映して開く() = runTest {
+        leftoverEdits.save(LeftoverRecipeEditKey.NewRecipe, leftover)
+
+        val viewModel = viewModel(resumesLeftover = true)
+
+        assertEquals("途中の生姜焼き", viewModel.editor.form.name)
+        assertNull(viewModel.editor.offeredLeftover)
+    }
+
+    @Test
+    fun 残った編集を選ばずに打つと打った分で書き替える() = runTest {
+        leftoverEdits.save(LeftoverRecipeEditKey.NewRecipe, leftover)
+        val viewModel = viewModel()
+
+        viewModel.changeName("親子丼")
+        advanceTimeBy(1_001)
+
+        assertEquals("親子丼", storedLeftover?.name)
+        assertEquals("途中の生姜焼き", viewModel.editor.offeredLeftover?.name)
+    }
+
+    @Test
+    fun 残った編集を選ばずに何も打たずに閉じたら残す() = runTest {
+        leftoverEdits.save(LeftoverRecipeEditKey.NewRecipe, leftover)
+        val viewModel = viewModel()
+
+        viewModel.requestClose()
+
+        assertEquals(CreateRecipeUiState.Closed, viewModel.uiState.value)
+        assertEquals(leftover, storedLeftover)
+    }
+
+    @Test
+    fun 示した残った編集を破棄すると消す() = runTest {
+        leftoverEdits.save(LeftoverRecipeEditKey.NewRecipe, leftover)
+        val viewModel = viewModel()
+
+        viewModel.discardLeftover()
+
+        assertNull(viewModel.editor.offeredLeftover)
+        assertNull(storedLeftover)
     }
 }

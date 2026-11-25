@@ -23,6 +23,11 @@
     <string name="modal_close">×</string>
     <string name="modal_cancel">キャンセル</string>
     <string name="recipe_list_create">レシピを作る</string>
+    <string name="leftover_new_recipe">作りかけのレシピがあります</string>
+    <string name="leftover_resume">続ける</string>
+    <string name="leftover_edit">前回の編集の途中の内容があります</string>
+    <string name="leftover_reflect">反映する</string>
+    <string name="leftover_discard">破棄する</string>
     <string name="recipe_edit">編集</string>
     <string name="recipe_editor_title_create">レシピを作る</string>
     <string name="recipe_editor_title_edit">レシピを編集</string>
