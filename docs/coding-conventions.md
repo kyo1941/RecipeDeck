@@ -31,7 +31,7 @@
 - ViewModel は、UseCase を呼ぶタイミング、UseCase の結果や画面の段階（読み込み中か編集中か等）による振り分け、ログ出力などの副作用を受け持つ
 - UiState の data class が状態遷移の関数を持つ操作は、必ずその関数を通して更新し、ViewModel で `copy` したり同じ規則を書き直したりしない。制約も連動もない単純な反映（検索結果の反映、帯を閉じるなど）は `copy` で変えてよい
 - 導出プロパティが判定している条件を、ViewModel や Composable で判定し直さない
-- 操作をきっかけに1回実行する処理（保存、読み込み、終了時の後始末など）は、ViewModel の関数から直接起こす。`StateFlow` の監視で起こさない（`StateFlow` は同じ値や連続した更新をまとめるため、実行のきっかけが落ちる）
+- 操作をきっかけに1回実行する処理（保存、終了時の後始末など）は、ViewModel の関数から直接起こし、UiState の `StateFlow` の値の変化をきっかけにしない（`StateFlow` は同じ値や連続した更新をまとめるため、実行のきっかけが落ちる）
 - `StateFlow` の監視で動かすのは、最新状態に追従させる処理（編集中データの下書き保存、入力に応じた候補検索など）だけにする
 - UseCase の結果で画面状態全体を組み立てる変換関数（`toUiState()` など）は、ViewModel の他状態を読まず、受け取った値だけから UiState を作る。ログ出力などの副作用はその関数の外で行う
 - UseCase から `Unexpected` を受けたら、その原因（`cause`）を ViewModel で1回だけログに残す。`Outcome.Failure` や `Unexpected` として呼び出し元へ返す側（`:shared:data` の Repository・`TransactionRunner` や UseCase）ではログを残さない
