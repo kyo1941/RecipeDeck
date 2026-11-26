@@ -2,6 +2,7 @@
 
 仕様は [docs/spec.md](docs/spec.md)、設計は [docs/architecture.md](docs/architecture.md) が正本です。
 作業の前に、関係する箇所を読んでください。
+コードを書くときとレビューするときは、[docs/coding-conventions.md](docs/coding-conventions.md) の規約を守ってください。
 
 - 未確定事項を「一般的にはこうだから」という理由で埋めない。実際の UseCase と最小の選択肢を示して相談する
 - 案を推すときは、その案がどの条件や場面のために要るのかと、その条件や場面がこのアプリにあるかを書く。なければ、ないと書く。前例や原則を当てはめるときは、前例でその形が要った理由が、今回にも当てはまるかを確かめる
@@ -29,3 +30,7 @@ Android の端末テストはエミュレータか実機が要るので、PR の
 ```sh
 ./gradlew :shared:data:connectedAndroidDeviceTest
 ```
+
+PR を作る前に、この節のコマンドをすべて流す。 
+画面を変えた PR には、両 OS のスクリーンショットと一連の操作の動画を貼る。
+画像と動画は `gh pr create --attach ./file.png`（後から足すなら `gh pr comment --attach`）で上げられる。本文の `![説明](./file.png)` は、上げた先に書き換わる。
