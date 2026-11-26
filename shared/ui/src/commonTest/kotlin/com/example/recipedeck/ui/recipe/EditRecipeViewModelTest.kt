@@ -70,12 +70,12 @@ class EditRecipeViewModelTest {
     private var editedIngredients: List<IngredientInput>? = null
 
     private fun viewModel(
-        shown: ObserveRecipeUseCase = ObserveRecipeUseCase { flowOf(gingerPork) },
+        observeRecipe: ObserveRecipeUseCase = ObserveRecipeUseCase { flowOf(gingerPork) },
         result: EditRecipeResult = EditRecipeResult.Saved(persistentListOf()),
         searchItems: SearchItemsUseCase = SearchItemsUseCase { SearchItemsResult.Found(persistentListOf()) },
     ) = EditRecipeViewModel(
         recipeId = gingerPork.recipe.id,
-        observeRecipe = shown,
+        observeRecipe = observeRecipe,
         editRecipe = { recipeId, _, _, _, ingredients ->
             editedRecipeId = recipeId
             editedIngredients = ingredients
@@ -125,7 +125,7 @@ class EditRecipeViewModelTest {
     fun 開いたRecipeのIDで読む() = runTest {
         var observedRecipeId: RecipeId? = null
         viewModel(
-            shown = { recipeId ->
+            observeRecipe = { recipeId ->
                 observedRecipeId = recipeId
                 flowOf(gingerPork)
             },
@@ -164,7 +164,7 @@ class EditRecipeViewModelTest {
 
     @Test
     fun 編集するRecipeがなければそのことを状態にする() = runTest {
-        val viewModel = viewModel(shown = { flowOf(ObserveRecipeResult.RecipeNoLongerExists) })
+        val viewModel = viewModel(observeRecipe = { flowOf(ObserveRecipeResult.RecipeNoLongerExists) })
 
         assertEquals(EditRecipeUiState.NoLongerExists, viewModel.uiState.value)
     }
@@ -173,7 +173,7 @@ class EditRecipeViewModelTest {
     fun 読み込みに失敗したら再試行で読み直す() = runTest {
         var calls = 0
         val viewModel = viewModel(
-            shown = {
+            observeRecipe = {
                 calls++
                 if (calls == 1) flowOf(ObserveRecipeResult.Unexpected(IllegalStateException())) else flowOf(gingerPork)
             },
@@ -187,18 +187,18 @@ class EditRecipeViewModelTest {
 
     @Test
     fun 読み込み中に閉じたら読み込みが終わっても閉じたままになる() = runTest {
-        val shown = MutableSharedFlow<ObserveRecipeResult>()
-        val viewModel = viewModel(shown = { shown })
+        val results = MutableSharedFlow<ObserveRecipeResult>()
+        val viewModel = viewModel(observeRecipe = { results })
 
         viewModel.requestClose()
-        shown.emit(gingerPork)
+        results.emit(gingerPork)
 
         assertEquals(EditRecipeUiState.Closed, viewModel.uiState.value)
     }
 
     @Test
     fun 見つからない画面で閉じると閉じる() = runTest {
-        val viewModel = viewModel(shown = { flowOf(ObserveRecipeResult.RecipeNoLongerExists) })
+        val viewModel = viewModel(observeRecipe = { flowOf(ObserveRecipeResult.RecipeNoLongerExists) })
 
         viewModel.requestClose()
 
@@ -273,7 +273,7 @@ class EditRecipeViewModelTest {
     fun Recipeが見つからなければ残った編集を消す() = runTest {
         leftoverEdits.save(leftoverKey, RecipeForm.of(gingerPork).toLeftoverEdit())
 
-        viewModel(shown = { flowOf(ObserveRecipeResult.RecipeNoLongerExists) })
+        viewModel(observeRecipe = { flowOf(ObserveRecipeResult.RecipeNoLongerExists) })
 
         assertEquals(emptyMap(), leftoverEdits.edits.value)
     }
@@ -281,11 +281,11 @@ class EditRecipeViewModelTest {
     @Test
     fun 分数で入力した整数の材料はメモだけ直して保存しても分数のまま() = runTest {
         val twoWhole = Amount(quantity(2), QuantityNotation.FRACTION, AmountUnit.PIECE)
-        val shown = gingerPork.copy(
+        val found = gingerPork.copy(
             recipe = gingerPork.recipe.copy(ingredients = persistentListOf(RecipeIngredient(pork.id, twoWhole))),
             ingredients = persistentListOf(ObserveRecipeResult.Found.Ingredient(pork, twoWhole)),
         )
-        val viewModel = viewModel(shown = { flowOf(shown) })
+        val viewModel = viewModel(observeRecipe = { flowOf(found) })
         assertEquals("2/1", viewModel.editor.form.ingredients.rows.single().ingredient.quantity.text)
 
         viewModel.changeMemo("弱火で焼く")
