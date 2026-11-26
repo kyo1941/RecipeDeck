@@ -34,6 +34,12 @@ class RecipeDeckNavigation(
         currentDestination = destination
     }
 
+    fun open(route: Route) {
+        val backStack = backStacks.getValue(currentDestination)
+        // 同じ Route を続けて積むと、Navigation 3 のキー衝突で画面状態や ViewModel がぶつかるため無視する。
+        if (backStack.lastOrNull() != route) backStack.add(route)
+    }
+
     fun goBack() {
         val backStack = backStacks.getValue(currentDestination)
         if (backStack.size > 1) backStack.removeLastOrNull() else select(TopLevelDestination.START)

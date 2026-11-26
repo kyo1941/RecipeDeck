@@ -14,7 +14,16 @@ import com.example.recipedeck.domain.recipe.RecipeRepository
 import com.example.recipedeck.domain.shopping.PurchaseRecordRepository
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepository
 import com.example.recipedeck.ui.ScreenViewModels
+import com.example.recipedeck.ui.recipe.CreateRecipeViewModel
+import com.example.recipedeck.ui.recipe.CreateRecipeViewModelFactory
+import com.example.recipedeck.ui.recipe.EditRecipeViewModel
+import com.example.recipedeck.ui.recipe.EditRecipeViewModelFactory
+import com.example.recipedeck.ui.recipe.LeftoverRecipeEditKey
+import com.example.recipedeck.ui.recipe.LeftoverRecipeEditKeeper
+import com.example.recipedeck.ui.recipe.LeftoverRecipeEditStore
 import com.example.recipedeck.ui.recipe.RecipeListViewModel
+import com.example.recipedeck.ui.recipe.RecipeViewModel
+import com.example.recipedeck.ui.recipe.RecipeViewModelFactory
 import com.example.recipedeck.ui.shopping.ShoppingListViewModel
 import com.example.recipedeck.usecase.item.CreateItemUseCase
 import com.example.recipedeck.usecase.item.DuplicateCandidateFinder
@@ -24,6 +33,7 @@ import com.example.recipedeck.usecase.item.SearchItemsUseCase
 import com.example.recipedeck.usecase.recipe.CreateRecipeUseCase
 import com.example.recipedeck.usecase.recipe.EditRecipeUseCase
 import com.example.recipedeck.usecase.recipe.ShowRecipeListUseCase
+import com.example.recipedeck.usecase.recipe.ShowRecipeUseCase
 import com.example.recipedeck.usecase.shopping.AddRecipeToShoppingSessionUseCase
 import com.example.recipedeck.usecase.shopping.FindSessionDuplicateCandidatesUseCase
 import com.example.recipedeck.usecase.shopping.MarkShoppingListItemPurchasedUseCase
@@ -50,7 +60,10 @@ interface AppGraph : ScreenViewModels {
 
     @DependencyGraph.Factory
     fun interface Factory {
-        fun create(@Provides databaseBuilder: RoomDatabase.Builder<RecipeDeckDatabase>): AppGraph
+        fun create(
+            @Provides databaseBuilder: RoomDatabase.Builder<RecipeDeckDatabase>,
+            @Provides leftoverRecipeEditStore: LeftoverRecipeEditStore,
+        ): AppGraph
     }
 
     @SingleIn(AppScope::class)
@@ -147,8 +160,50 @@ interface AppGraph : ScreenViewModels {
         ShowRecipeListUseCase(recipeRepository)
 
     @Provides
-    fun provideRecipeListViewModel(showRecipeListUseCase: ShowRecipeListUseCase): RecipeListViewModel =
-        RecipeListViewModel(showRecipeList = showRecipeListUseCase::invoke)
+    fun provideShowRecipeUseCase(recipeRepository: RecipeRepository, itemRepository: ItemRepository): ShowRecipeUseCase =
+        ShowRecipeUseCase(recipeRepository, itemRepository)
+
+    @Provides
+    fun provideRecipeViewModelFactory(showRecipeUseCase: ShowRecipeUseCase): RecipeViewModelFactory =
+        RecipeViewModelFactory { recipeId -> RecipeViewModel(showRecipe = { showRecipeUseCase(recipeId) }) }
+
+    @Provides
+    fun provideCreateRecipeViewModelFactory(
+        createRecipeUseCase: CreateRecipeUseCase,
+        searchItemsUseCase: SearchItemsUseCase,
+        leftoverRecipeEditStore: LeftoverRecipeEditStore,
+    ): CreateRecipeViewModelFactory = CreateRecipeViewModelFactory { resumesLeftover ->
+        CreateRecipeViewModel(
+            createRecipe = createRecipeUseCase::invoke,
+            searchItems = searchItemsUseCase::invoke,
+            leftoverEditKeeper = LeftoverRecipeEditKeeper(leftoverRecipeEditStore, LeftoverRecipeEditKey.NewRecipe),
+            resumesLeftover = resumesLeftover,
+        )
+    }
+
+    @Provides
+    fun provideEditRecipeViewModelFactory(
+        showRecipeUseCase: ShowRecipeUseCase,
+        editRecipeUseCase: EditRecipeUseCase,
+        searchItemsUseCase: SearchItemsUseCase,
+        leftoverRecipeEditStore: LeftoverRecipeEditStore,
+    ): EditRecipeViewModelFactory = EditRecipeViewModelFactory { recipeId ->
+        EditRecipeViewModel(
+            showRecipe = { showRecipeUseCase(recipeId) },
+            editRecipe = { name, status, memo, ingredients -> editRecipeUseCase(recipeId, name, status, memo, ingredients) },
+            searchItems = searchItemsUseCase::invoke,
+            leftoverEditKeeper = LeftoverRecipeEditKeeper(leftoverRecipeEditStore, LeftoverRecipeEditKey.OfRecipe(recipeId)),
+        )
+    }
+
+    @Provides
+    fun provideRecipeListViewModel(
+        showRecipeListUseCase: ShowRecipeListUseCase,
+        leftoverRecipeEditStore: LeftoverRecipeEditStore,
+    ): RecipeListViewModel = RecipeListViewModel(
+        showRecipeList = showRecipeListUseCase::invoke,
+        leftoverEdits = leftoverRecipeEditStore,
+    )
 
     @Provides
     fun provideShoppingListViewModel(showShoppingListUseCase: ShowShoppingListUseCase): ShoppingListViewModel =

@@ -106,6 +106,51 @@ class RoomRecipeRepositoryTest {
     }
 
     @Test
+    fun IDでの監視は今のRecipeを材料も含めて流す() = runTestWithRecipeDeckDatabase { database ->
+        saveItems(database)
+        val repository = RoomRecipeRepository(database)
+        val gingerPork = recipe(id = "recipe-1", ingredients = listOf(RecipeIngredient(pork.id, null), RecipeIngredient(onion.id, null)))
+        repository.save(gingerPork)
+        repository.save(recipe(id = "recipe-2", name = "サラダ"))
+
+        assertEquals(Outcome.Success(gingerPork), observedValues(repository.observeById(RecipeId("recipe-1"))).receive())
+    }
+
+    @Test
+    fun IDでの監視は無いIDならnullを流す() = runTestWithRecipeDeckDatabase { database ->
+        assertEquals(Outcome.Success(null), observedValues(RoomRecipeRepository(database).observeById(RecipeId("recipe-1"))).receive())
+    }
+
+    @Test
+    fun IDでの監視は材料の表だけが変わっても流し直す() = runTestWithRecipeDeckDatabase { database ->
+        saveItems(database)
+        val repository = RoomRecipeRepository(database)
+        repository.save(recipe(id = "recipe-1", ingredients = listOf(RecipeIngredient(pork.id, amountOrFail(200, 1, QuantityNotation.DECIMAL, AmountUnit.GRAM)))))
+        val values = observedValues(repository.observeById(RecipeId("recipe-1")))
+        values.receive()
+
+        database.writeSql("UPDATE recipe_ingredient SET quantity_numerator = 300 WHERE recipe_id = 'recipe-1'")
+
+        val expected = recipe(id = "recipe-1", ingredients = listOf(RecipeIngredient(pork.id, amountOrFail(300, 1, QuantityNotation.DECIMAL, AmountUnit.GRAM))))
+        assertEquals(Outcome.Success(expected), values.receive())
+    }
+
+    @Test
+    fun IDでの監視は読み戻しに失敗しても閉じず次の変更で流し直す() = runTestWithRecipeDeckDatabase { database ->
+        val repository = RoomRecipeRepository(database)
+        val saved = recipe(id = "recipe-1", name = "生姜焼き")
+        repository.save(saved)
+        val values = observedValues(repository.observeById(RecipeId("recipe-1")))
+        values.receive()
+
+        database.writeSql("UPDATE recipe SET name = ' ' WHERE id = 'recipe-1'")
+        assertIs<Outcome.Failure<RecipeRepositoryFailure.Unexpected>>(values.receive())
+
+        database.writeSql("UPDATE recipe SET name = '生姜焼き' WHERE id = 'recipe-1'")
+        assertEquals(Outcome.Success(saved), values.receive())
+    }
+
+    @Test
     fun 保存したRecipeをIDで読める() = runTestWithRecipeDeckDatabase { database ->
         saveItems(database)
         val repository = RoomRecipeRepository(database)

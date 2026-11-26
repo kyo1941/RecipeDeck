@@ -1,6 +1,7 @@
 package com.example.recipedeck.data.item
 
 import com.example.recipedeck.data.RecipeDeckDatabase
+import com.example.recipedeck.data.observeOutcomeOf
 import com.example.recipedeck.data.outcomeOf
 import com.example.recipedeck.data.storedNotBlankStringOf
 import com.example.recipedeck.domain.NotBlankString
@@ -11,8 +12,9 @@ import com.example.recipedeck.domain.item.ItemRepository
 import com.example.recipedeck.domain.item.ItemRepositoryFailure
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.flow.Flow
 
-class RoomItemRepository(database: RecipeDeckDatabase) : ItemRepository {
+class RoomItemRepository(private val database: RecipeDeckDatabase) : ItemRepository {
     private val dao = database.itemDao()
 
     override suspend fun save(item: Item): Outcome<Unit, ItemRepositoryFailure> =
@@ -23,6 +25,11 @@ class RoomItemRepository(database: RecipeDeckDatabase) : ItemRepository {
 
     override suspend fun findByIds(ids: Set<ItemId>): Outcome<ImmutableList<Item>, ItemRepositoryFailure> =
         outcomeOf(ItemRepositoryFailure::Unexpected) { dao.findByIds(ids.map { it.value }).toItems() }
+
+    override fun observeByIds(ids: Set<ItemId>): Flow<Outcome<ImmutableList<Item>, ItemRepositoryFailure>> =
+        database.observeOutcomeOf(ItemEntity.TABLE_NAME, toFailure = ItemRepositoryFailure::Unexpected) {
+            dao.findByIds(ids.map { it.value }).toItems()
+        }
 
     override suspend fun findByDisplayName(displayName: NotBlankString): Outcome<Item?, ItemRepositoryFailure> =
         outcomeOf(ItemRepositoryFailure::Unexpected) { dao.findByDisplayName(displayName.value)?.toItem() }

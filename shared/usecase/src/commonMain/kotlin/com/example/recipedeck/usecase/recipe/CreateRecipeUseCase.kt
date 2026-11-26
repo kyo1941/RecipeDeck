@@ -25,6 +25,7 @@ class CreateRecipeUseCase(
     suspend operator fun invoke(
         name: String,
         status: RecipeStatus,
+        memo: String,
         ingredients: List<IngredientInput>,
     ): CreateRecipeResult {
         val recipeName = NotBlankString.of(name) ?: return CreateRecipeResult.NameRequired
@@ -54,7 +55,7 @@ class CreateRecipeUseCase(
                 name = recipeName,
                 status = status,
                 photoRef = null,
-                memo = null,
+                memo = NotBlankString.of(memo),
                 ingredients = resolved.recipeIngredients,
             )
             when (val saved = recipeRepository.save(recipe)) {

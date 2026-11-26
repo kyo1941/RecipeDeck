@@ -32,6 +32,7 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodel.navigation3)
             implementation(libs.androidx.navigation3.ui)
             implementation(libs.kotlinx.serialization.core)
+            implementation(libs.kermit)
             api(libs.androidx.lifecycle.viewmodel.compose)
         }
         commonTest.dependencies {
