@@ -590,4 +590,44 @@ class CreateRecipeViewModelTest {
         assertEquals(CreateRecipeUiState.Closed, viewModel.uiState.value)
         assertEquals(leftover, storedLeftover)
     }
+
+    @Test
+    fun 残った編集を反映すると反映前に探した候補は出さない() = runTest {
+        leftoverEdits.save(LeftoverRecipeEditKey.NewRecipe, leftover)
+        val viewModel = viewModel(searchItems = { SearchItemsResult.Found(persistentListOf(porkBelly)) })
+        viewModel.changeIngredientName(viewModel.firstKey, "豚")
+        assertEquals<List<Item>?>(listOf(porkBelly), viewModel.editor.shownFoundItems?.items)
+
+        viewModel.reflectLeftover()
+
+        assertNull(viewModel.editor.shownFoundItems)
+    }
+
+    @Test
+    fun 候補を選ぶと走っている検索を取り消す() = runTest {
+        val searching = CompletableDeferred<Unit>()
+        var finished = false
+        val viewModel = viewModel(searchItems = {
+            searching.await()
+            finished = true
+            SearchItemsResult.Found(persistentListOf(pork))
+        })
+        viewModel.changeIngredientName(viewModel.firstKey, "豚")
+
+        viewModel.selectItem(viewModel.firstKey, pork)
+        searching.complete(Unit)
+
+        assertEquals(false, finished)
+    }
+
+    @Test
+    fun 開いただけでは残った編集を書かない() = runTest {
+        leftoverEdits.save(LeftoverRecipeEditKey.NewRecipe, leftover)
+        val writesBeforeOpening = leftoverEdits.writes
+
+        viewModel()
+        advanceTimeBy(1_001)
+
+        assertEquals(writesBeforeOpening, leftoverEdits.writes)
+    }
 }

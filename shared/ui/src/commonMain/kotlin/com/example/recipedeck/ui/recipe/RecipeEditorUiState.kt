@@ -55,7 +55,7 @@ data class RecipeEditorUiState(
         get() = foundItems?.takeIf { found ->
             found.query == itemQuery &&
                 saveStatus != SaveStatus.Saving &&
-                form.ingredients.rows.any { it.key == found.query.ingredientKey }
+                form.ingredients.rows.any { it.key == found.query.ingredientKey && it.ingredient.name == found.query.keyword }
         }
 
     val leftoverToKeep: RecipeForm? get() = if (hasUnsavedChanges) form else offeredLeftover
@@ -75,7 +75,7 @@ data class RecipeEditorUiState(
 
     fun withLeftoverReflected(): RecipeEditorUiState {
         val leftover = offeredLeftover
-        return if (leftover == null || saveStatus == SaveStatus.Saving) this else copy(form = leftover, offeredLeftover = null)
+        return if (leftover == null || saveStatus == SaveStatus.Saving) this else copy(form = leftover, offeredLeftover = null, itemQuery = null)
     }
 
     fun saveRequested(): RecipeEditorUiState? =

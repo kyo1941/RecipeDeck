@@ -51,8 +51,9 @@ class LeftoverRecipeEditKeeper(
     private val key: LeftoverRecipeEditKey,
 ) {
     private var saveJob: Job? = null
+    private var stored: Stored? = null
 
-    suspend fun read(): RecipeForm? = store.leftoverEdit(key).first()?.let(RecipeForm::of)
+    suspend fun read(): RecipeForm? = store.leftoverEdit(key).first()?.let(RecipeForm::of).also { stored = Stored(it) }
 
     @OptIn(FlowPreview::class)
     fun keepSaving(scope: CoroutineScope, leftovers: Flow<RecipeForm?>) {
@@ -75,11 +76,16 @@ class LeftoverRecipeEditKeeper(
     }
 
     private suspend fun write(leftover: RecipeForm?) {
+        if (stored?.let { leftover.hasSameContentAs(it.leftover) } == true) return
         if (leftover == null) store.delete(key) else store.save(key, leftover.toLeftoverEdit())
+        stored = Stored(leftover)
     }
 
     private fun RecipeForm?.hasSameContentAs(other: RecipeForm?): Boolean =
         if (this == null || other == null) this == other else hasSameContentAs(other)
+
+    // 保存先にあると分かっている残った編集。まだ読んでも書いてもいなければ、分からないので null。
+    private data class Stored(val leftover: RecipeForm?)
 
     private companion object {
         val WRITE_DELAY = 1.seconds

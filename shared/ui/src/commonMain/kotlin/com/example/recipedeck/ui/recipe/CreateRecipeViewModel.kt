@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
@@ -101,7 +100,9 @@ class CreateRecipeViewModel(
     }
 
     private suspend fun searchItemsWhenQueried() {
-        editors.map { it.itemQuery }.distinctUntilChanged().filterNotNull().collectLatest { query ->
+        // 探す名前がなくなったとき（候補を選んだときなど）も前の検索を取り消すため、null も collectLatest に流す。
+        editors.map { it.itemQuery }.distinctUntilChanged().collectLatest { query ->
+            if (query == null) return@collectLatest
             val items = when (val result = searchItems(query.keyword)) {
                 is SearchItemsResult.Found -> result.items
                 is SearchItemsResult.Unexpected -> persistentListOf<Item>().also { logger.e(result.cause) { "材料の名前で Item を探せなかった" } }
