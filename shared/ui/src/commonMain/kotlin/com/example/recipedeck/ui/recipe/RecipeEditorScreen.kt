@@ -80,18 +80,24 @@ fun CreateRecipeScreen(viewModel: CreateRecipeViewModel, onClosed: () -> Unit, m
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState) {
-        if (uiState == CreateRecipeUiState.Closed) onClosed()
+        if (uiState is RecipeEditorStep.Finished) onClosed()
     }
-    ModalBackHandler(onCloseRequest = viewModel::requestClose)
+    val editor = (uiState as? RecipeEditorStep.Editing)?.editor
+    // エディタがない間は、閉じても失われる入力も残った編集もないので、ViewModel を通さずに閉じる。
+    val onCloseRequest = if (editor != null) viewModel::requestClose else onClosed
+    ModalBackHandler(onCloseRequest = onCloseRequest)
 
-    val editor = (uiState as? CreateRecipeUiState.Editing)?.editor
     RecipeEditorFrame(
         title = stringResource(Res.string.recipe_editor_title_create),
         editor = editor,
         actions = viewModel,
+        onCloseRequest = onCloseRequest,
         modifier = modifier,
     ) { contentModifier ->
-        if (editor != null) RecipeEditorForm(editor, viewModel, contentModifier)
+        when (val state = uiState) {
+            CreateRecipeUiState.Loading, is RecipeEditorStep.Finished -> CenteredContent(contentModifier) { CircularProgressIndicator() }
+            is RecipeEditorStep.Editing -> RecipeEditorForm(state.editor, viewModel, contentModifier)
+        }
     }
 }
 
@@ -100,21 +106,25 @@ fun EditRecipeScreen(viewModel: EditRecipeViewModel, onClosed: () -> Unit, modif
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState) {
-        if (uiState == EditRecipeUiState.Closed) onClosed()
+        if (uiState is RecipeEditorStep.Finished) onClosed()
     }
-    ModalBackHandler(onCloseRequest = viewModel::requestClose)
+    val editor = (uiState as? RecipeEditorStep.Editing)?.editor
+    // エディタがない間は、閉じても失われる入力も残った編集もないので、ViewModel を通さずに閉じる。
+    val onCloseRequest = if (editor != null) viewModel::requestClose else onClosed
+    ModalBackHandler(onCloseRequest = onCloseRequest)
 
     RecipeEditorFrame(
         title = stringResource(Res.string.recipe_editor_title_edit),
-        editor = (uiState as? EditRecipeUiState.Editing)?.editor,
+        editor = editor,
         actions = viewModel,
+        onCloseRequest = onCloseRequest,
         modifier = modifier,
     ) { contentModifier ->
         when (val state = uiState) {
-            EditRecipeUiState.Loading, EditRecipeUiState.Closed -> CenteredContent(contentModifier) { CircularProgressIndicator() }
+            EditRecipeUiState.Loading, is RecipeEditorStep.Finished -> CenteredContent(contentModifier) { CircularProgressIndicator() }
             EditRecipeUiState.LoadFailed -> LoadFailedContent(stringResource(Res.string.recipe_load_failed), viewModel::retry, contentModifier)
             EditRecipeUiState.NoLongerExists -> CenteredContent(contentModifier) { Text(stringResource(Res.string.recipe_no_longer_exists)) }
-            is EditRecipeUiState.Editing -> RecipeEditorForm(state.editor, viewModel, contentModifier)
+            is RecipeEditorStep.Editing -> RecipeEditorForm(state.editor, viewModel, contentModifier)
         }
     }
 }
@@ -124,6 +134,7 @@ private fun RecipeEditorFrame(
     title: String,
     editor: RecipeEditorUiState?,
     actions: RecipeEditorActions,
+    onCloseRequest: () -> Unit,
     modifier: Modifier,
     content: @Composable (Modifier) -> Unit,
 ) {
@@ -132,7 +143,7 @@ private fun RecipeEditorFrame(
         topBar = {
             TopAppBar(
                 title = { Text(title) },
-                navigationIcon = { ModalCloseButton(onCloseRequest = actions::requestClose, enabled = editor?.saveStatus != SaveStatus.Saving) },
+                navigationIcon = { ModalCloseButton(onCloseRequest = onCloseRequest, enabled = editor?.saveStatus != SaveStatus.Saving) },
                 actions = {
                     if (editor != null) {
                         TextButton(onClick = actions::save, enabled = editor.saveStatus != SaveStatus.Saving) {
@@ -223,7 +234,7 @@ private fun RecipeEditorForm(editor: RecipeEditorUiState, actions: RecipeEditorA
                 key = row.key,
                 ingredient = row.ingredient,
                 isNameRequired = row.key in ingredientKeysRequiringName,
-                foundItems = if (focusedNameKey == row.key && shownFoundItems?.ingredientKey == row.key) {
+                foundItems = if (focusedNameKey == row.key && shownFoundItems?.query?.ingredientKey == row.key) {
                     shownFoundItems.items.take(MAX_SHOWN_FOUND_ITEMS).toImmutableList()
                 } else {
                     persistentListOf()

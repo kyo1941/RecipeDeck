@@ -18,6 +18,7 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
@@ -84,7 +85,7 @@ class CreateRecipeViewModelTest {
     private fun viewModel(result: suspend () -> CreateRecipeResult) = viewModel(searchItems = { SearchItemsResult.Found(persistentListOf()) }, result = result)
 
     private val CreateRecipeViewModel.editor: RecipeEditorUiState
-        get() = assertIs<CreateRecipeUiState.Editing>(uiState.value).editor
+        get() = assertIs<RecipeEditorStep.Editing>(uiState.value).editor
 
     private val CreateRecipeViewModel.firstKey: Long
         get() = editor.form.ingredients.rows.first().key
@@ -120,7 +121,7 @@ class CreateRecipeViewModelTest {
         assertEquals(RecipeStatus.READY, saved.status)
         assertEquals("強火で焼く", saved.memo)
         assertEquals(listOf(IngredientInput(ItemInput.Typed("豚肉"), quantity(200), QuantityNotation.DECIMAL, AmountUnit.GRAM)), saved.ingredients)
-        assertEquals(CreateRecipeUiState.Closed, viewModel.uiState.value)
+        assertIs<RecipeEditorStep.Finished>(viewModel.uiState.value)
     }
 
     @Test
@@ -266,7 +267,7 @@ class CreateRecipeViewModelTest {
         assertEquals(1, calls)
         assertEquals(SaveStatus.Saving, viewModel.editor.saveStatus)
         result.complete(CreateRecipeResult.Created(RecipeId("new"), persistentListOf()))
-        assertEquals(CreateRecipeUiState.Closed, viewModel.uiState.value)
+        assertIs<RecipeEditorStep.Finished>(viewModel.uiState.value)
     }
 
     @Test
@@ -302,7 +303,7 @@ class CreateRecipeViewModelTest {
 
         viewModel.requestClose()
 
-        assertEquals(CreateRecipeUiState.Closed, viewModel.uiState.value)
+        assertIs<RecipeEditorStep.Finished>(viewModel.uiState.value)
     }
 
     @Test
@@ -319,7 +320,7 @@ class CreateRecipeViewModelTest {
 
         viewModel.requestClose()
         viewModel.discard()
-        assertEquals(CreateRecipeUiState.Closed, viewModel.uiState.value)
+        assertIs<RecipeEditorStep.Finished>(viewModel.uiState.value)
     }
 
     @Test
@@ -334,7 +335,7 @@ class CreateRecipeViewModelTest {
 
         assertEquals(listOf("豚"), keywords)
         val found = viewModel.editor.shownFoundItems
-        assertEquals(viewModel.firstKey, found?.ingredientKey)
+        assertEquals(viewModel.firstKey, found?.query?.ingredientKey)
         assertEquals<List<Item>?>(listOf(pork, porkBelly), found?.items)
     }
 
@@ -494,7 +495,7 @@ class CreateRecipeViewModelTest {
 
         viewModel.requestClose()
 
-        assertEquals(CreateRecipeUiState.Closed, viewModel.uiState.value)
+        assertIs<RecipeEditorStep.Finished>(viewModel.uiState.value)
         assertEquals(leftover, storedLeftover)
     }
 
@@ -504,8 +505,56 @@ class CreateRecipeViewModelTest {
         val viewModel = viewModel()
 
         viewModel.discardLeftover()
+        advanceTimeBy(1_001)
 
         assertNull(viewModel.editor.offeredLeftover)
         assertNull(storedLeftover)
+    }
+
+    @Test
+    fun 残った編集を選ばずに打って元に戻すと残った編集に戻る() = runTest {
+        leftoverEdits.save(LeftoverRecipeEditKey.NewRecipe, leftover)
+        val viewModel = viewModel()
+        viewModel.changeName("親子丼")
+        advanceTimeBy(1_001)
+
+        viewModel.changeName("")
+        advanceTimeBy(1_001)
+
+        assertEquals(leftover, storedLeftover)
+    }
+
+    @Test
+    fun 閉じたらまだ書いていない分を待たずに書く() = runTest {
+        val viewModel = viewModel()
+        viewModel.changeName("生姜焼き")
+
+        viewModel.requestClose()
+        viewModel.discard()
+
+        assertNull(storedLeftover)
+        assertIs<RecipeEditorStep.Finished>(viewModel.uiState.value)
+    }
+
+    @Test
+    fun 残った編集を読み終えるまでは読み込み中() = runTest {
+        val reading = CompletableDeferred<Unit>()
+        val slowStore = object : LeftoverRecipeEditStore by leftoverEdits {
+            override fun leftoverEdit(key: LeftoverRecipeEditKey) = flow {
+                reading.await()
+                emit(leftoverEdits.edits.value[key])
+            }
+        }
+        val viewModel = CreateRecipeViewModel(
+            createRecipe = { _, _, _, _ -> CreateRecipeResult.Created(RecipeId("new"), persistentListOf()) },
+            searchItems = { SearchItemsResult.Found(persistentListOf()) },
+            leftoverEditKeeper = LeftoverRecipeEditKeeper(slowStore, LeftoverRecipeEditKey.NewRecipe),
+            resumesLeftover = false,
+        )
+        assertEquals(CreateRecipeUiState.Loading, viewModel.uiState.value)
+
+        reading.complete(Unit)
+
+        assertIs<RecipeEditorStep.Editing>(viewModel.uiState.value)
     }
 }

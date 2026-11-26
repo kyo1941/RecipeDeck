@@ -3,18 +3,16 @@ package com.example.recipedeck.ui.recipe
 import com.example.recipedeck.domain.amount.AmountUnit
 import com.example.recipedeck.domain.recipe.RecipeId
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 @Serializable
@@ -47,39 +45,37 @@ interface LeftoverRecipeEditStore {
     suspend fun delete(key: LeftoverRecipeEditKey)
 }
 
+/**
+ * 保存先に置くべき残った編集。null なら消す。
+ * 閉じたときなど、待たずに書くものは isImmediate にする。
+ */
+data class LeftoverWrite(val leftover: RecipeForm?, val isImmediate: Boolean)
+
 class LeftoverRecipeEditKeeper(
     private val store: LeftoverRecipeEditStore,
     private val key: LeftoverRecipeEditKey,
 ) {
-    private var saveJob: Job? = null
-
     suspend fun read(): RecipeForm? = store.leftoverEdit(key).first()?.let(RecipeForm::of)
 
     @OptIn(FlowPreview::class)
-    fun keepSaving(scope: CoroutineScope, editors: Flow<RecipeEditorUiState>) {
-        if (saveJob != null) return
-        saveJob = scope.launch {
-            editors
-                .distinctUntilChanged { old, new -> old.form.hasSameContentAs(new.form) }
-                .drop(1)
-                .debounce(WRITE_DELAY)
-                .collect { editor ->
-                    if (editor.hasUnsavedChanges) store.save(key, editor.form.toLeftoverEdit()) else store.delete(key)
+    fun keepSaving(scope: CoroutineScope, writes: Flow<LeftoverWrite>) {
+        scope.launch {
+            writes
+                .distinctUntilChanged { old, new -> old.isImmediate == new.isImmediate && old.leftover.hasSameContentAs(new.leftover) }
+                .debounce { if (it.isImmediate) Duration.ZERO else WRITE_DELAY }
+                .collect { write ->
+                    // 閉じるとすぐ ViewModel が片付けられ、scope が取り消される。
+                    // 書き損ねると、捨てたはずの入力が次に開いたときに出るので、取り消されても書き終える形にする。
+                    withContext(NonCancellable) {
+                        val leftover = write.leftover
+                        if (leftover == null) store.delete(key) else store.save(key, leftover.toLeftoverEdit())
+                    }
                 }
         }
     }
 
-    fun stopSaving() {
-        saveJob?.cancel()
-    }
-
-    // 閉じるとすぐ ViewModel が片付けられ、scope が取り消される。
-    // 消し損ねると、捨てたはずの入力が次に開いたときに出るので、取り消されても消し終える形にする。
-    fun delete(scope: CoroutineScope) {
-        scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            withContext(NonCancellable) { store.delete(key) }
-        }
-    }
+    private fun RecipeForm?.hasSameContentAs(other: RecipeForm?): Boolean =
+        if (this == null || other == null) this == other else hasSameContentAs(other)
 
     private companion object {
         val WRITE_DELAY = 1.seconds
