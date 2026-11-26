@@ -11,9 +11,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.recipedeck.ui.ScreenPreview
 import com.example.recipedeck.ui.resources.Res
 import com.example.recipedeck.ui.resources.leftover_discard
+import com.example.recipedeck.ui.resources.leftover_edit
+import com.example.recipedeck.ui.resources.leftover_new_recipe
+import com.example.recipedeck.ui.resources.leftover_reflect
+import com.example.recipedeck.ui.resources.leftover_resume
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -33,5 +39,45 @@ internal fun LeftoverEditBanner(
                 TextButton(onClick = onDiscard, enabled = enabled) { Text(stringResource(Res.string.leftover_discard)) }
             }
         }
+    }
+}
+
+@Preview
+@Composable
+private fun LeftoverEditBannerNewRecipePreview() {
+    ScreenPreview {
+        LeftoverEditBanner(
+            message = stringResource(Res.string.leftover_new_recipe),
+            useLabel = stringResource(Res.string.leftover_resume),
+            onUse = {},
+            onDiscard = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun LeftoverEditBannerEditorPreview() {
+    ScreenPreview {
+        LeftoverEditBanner(
+            message = stringResource(Res.string.leftover_edit),
+            useLabel = stringResource(Res.string.leftover_reflect),
+            onUse = {},
+            onDiscard = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun LeftoverEditBannerDisabledPreview() {
+    ScreenPreview {
+        LeftoverEditBanner(
+            message = stringResource(Res.string.leftover_edit),
+            useLabel = stringResource(Res.string.leftover_reflect),
+            onUse = {},
+            onDiscard = {},
+            enabled = false,
+        )
     }
 }
