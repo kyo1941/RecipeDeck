@@ -13,12 +13,16 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
-class ShowShoppingListUseCase(
-    private val shoppingSessionRepository: ShoppingSessionRepository,
-    private val purchaseRecordRepository: PurchaseRecordRepository,
-) {
+fun interface ShowShoppingListUseCase {
+    operator fun invoke(): Flow<ShowShoppingListResult>
+}
+
+fun ShowShoppingListUseCase(
+    shoppingSessionRepository: ShoppingSessionRepository,
+    purchaseRecordRepository: PurchaseRecordRepository,
+): ShowShoppingListUseCase = object : ShowShoppingListUseCase {
     @OptIn(ExperimentalCoroutinesApi::class)
-    operator fun invoke(): Flow<ShowShoppingListResult> =
+    override fun invoke(): Flow<ShowShoppingListResult> =
         shoppingSessionRepository.observeActive().flatMapLatest { found ->
             val session = when (found) {
                 is Outcome.Success -> found.value ?: return@flatMapLatest flowOf(ShowShoppingListResult.NoActiveSession)

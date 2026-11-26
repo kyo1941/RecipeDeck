@@ -13,6 +13,7 @@ import com.example.recipedeck.domain.recipe.RecipeStatus
 import com.example.recipedeck.usecase.ingredient.IngredientInput
 import com.example.recipedeck.usecase.ingredient.ItemInput
 import com.example.recipedeck.usecase.item.SearchItemsResult
+import com.example.recipedeck.usecase.item.SearchItemsUseCase
 import com.example.recipedeck.usecase.recipe.CreateRecipeResult
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.CompletableDeferred
@@ -69,7 +70,7 @@ class CreateRecipeViewModelTest {
     )
 
     private fun viewModel(
-        searchItems: suspend (String) -> SearchItemsResult = { SearchItemsResult.Found(persistentListOf()) },
+        searchItems: SearchItemsUseCase = SearchItemsUseCase { SearchItemsResult.Found(persistentListOf()) },
         resumesLeftover: Boolean = false,
         result: suspend () -> CreateRecipeResult = { CreateRecipeResult.Created(RecipeId("new"), persistentListOf()) },
     ) = CreateRecipeViewModel(

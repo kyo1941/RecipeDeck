@@ -7,10 +7,10 @@ import com.example.recipedeck.domain.amount.Amount
 import com.example.recipedeck.domain.recipe.RecipeId
 import com.example.recipedeck.domain.recipe.RecipeStatus
 import com.example.recipedeck.usecase.recipe.ShowRecipeResult
+import com.example.recipedeck.usecase.recipe.ShowRecipeUseCase
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,14 +21,15 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 
 class RecipeViewModel(
-    showRecipe: () -> Flow<ShowRecipeResult>,
+    recipeId: RecipeId,
+    showRecipe: ShowRecipeUseCase,
 ) : ViewModel() {
     private val retryRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<RecipeUiState> = retryRequests
         .onStart { emit(Unit) }
-        .flatMapLatest { showRecipe() }
+        .flatMapLatest { showRecipe(recipeId) }
         .onEach { if (it is ShowRecipeResult.Unexpected) logger.e(it.cause) { "Recipe を読み込めなかった" } }
         .map { it.toUiState() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), RecipeUiState.Loading)

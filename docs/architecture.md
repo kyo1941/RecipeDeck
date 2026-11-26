@@ -286,8 +286,8 @@ erDiagram
   - 導出の元にしかならない値は private にし、使う側が導出される値を読むことをコンパイラで守る
   - 1回だけ起こす処理（保存、読み込み、閉じるときの残った編集の確定）は、ViewModel の関数が data class の関数の結果を見て直接起こす。今の状態に追いかけて合わせたいもの（編集中の残った編集の書き込み、Item の候補の検索）だけを `StateFlow` の監視で動かす。`StateFlow` は今の状態を持つものなので、1回だけの出来事を運ぶと、続けて変わった値がまとめられて落ちる（保存できない入力の直後に同じ入力で保存を押すと、保存が始まらなかった）
   - 画面を抜けることは、UiState の `Closed` で表し、画面がそれを見て遷移の関数を呼ぶ。ViewModel から画面への1回だけの出来事は、通知ではなく状態で渡す（[UI events](https://developer.android.com/topic/architecture/ui-layer/events)）。通知では、画面が受け取れない間の出来事が失われうるためである
-- ViewModel は UseCase を関数型で受け取る。`:shared:app` が UseCase の `invoke` を渡し、テストは結果を返すラムダを渡す。UseCase は `invoke` を1つだけ持つので、関数型はその形をそのまま書いた口になる
-  - UseCase に interface を設ける形に移すのは、次の場面が出たときとする。同じ型の引数の取り違えが問題になる（関数型では呼ぶときに引数の名前を使えない。今は `EditRecipeUseCase` の `name` と `memo` だけで、ViewModel のテストで確かめる）、本番で UseCase の実装を差し替える。移すときに変わるのは、ViewModel のコンストラクタの型と `:shared:app` の渡し方だけである
+- UseCase は `invoke` を1つだけ持つ fun interface とし、同じファイルに、同じ名前の組み立てる関数を置いて、中身はその関数の中に書く。ViewModel はこの型で受け取るので、同じ型の引数（`name` と `memo` など）を引数の名前で呼び分けられ、同じ UseCase を複数の ViewModel で使い回せる。`:shared:app` は組み立てた UseCase をそのまま渡し、テストは結果を返すラムダを渡す
+  - Recipe の ID のように画面を開くときに決まる値は、ViewModel が受け取って UseCase に渡す。`:shared:app` で UseCase に束ねると、ViewModel のテストでは渡す値を確かめられないため
 - 画面が ViewModel を受け取る口は、`:shared:ui` の `ScreenViewModels` に置き、`AppGraph` が継ぐ。`:shared:ui` からグラフは見えないためである（「モジュール構成」）。画面は `viewModel { viewModels.… }` で受けるので、ViewModel を作るのはストアに無いときだけになる。Android の画面の回転でも作り直されない
   - 引数が要る ViewModel（Recipe の ID を受け取る Recipe の画面など）は、`:shared:ui` に置いた factory の interface で受け、`:shared:app` で作る
 - 残った編集（[spec.md](spec.md#画面の構成)）は、型付きの DataStore に、Recipe の ID ごとに入れる。新しく作っている途中の分は、別のキーにする。入力が変わるたびにデバウンスして書き、保存したとき、入力を捨てて閉じたときに消す。デバウンスの間に終わらされた分は失われてよい

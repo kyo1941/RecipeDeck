@@ -7,12 +7,19 @@ import com.example.recipedeck.domain.item.ItemId
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
-class FindDuplicateCandidatesUseCase(
-    private val duplicateCandidateFinder: DuplicateCandidateFinder,
-) {
+fun interface FindDuplicateCandidatesUseCase {
     suspend operator fun invoke(
         displayName: String,
-        renamingItemId: ItemId? = null,
+        renamingItemId: ItemId?,
+    ): FindDuplicateCandidatesResult
+}
+
+fun FindDuplicateCandidatesUseCase(
+    duplicateCandidateFinder: DuplicateCandidateFinder,
+): FindDuplicateCandidatesUseCase = object : FindDuplicateCandidatesUseCase {
+    override suspend fun invoke(
+        displayName: String,
+        renamingItemId: ItemId?,
     ): FindDuplicateCandidatesResult {
         val typedDisplayName = NotBlankString.of(displayName)
             ?: return FindDuplicateCandidatesResult.Found(persistentListOf())

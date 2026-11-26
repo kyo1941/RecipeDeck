@@ -17,12 +17,21 @@ import com.example.recipedeck.usecase.ingredient.typedDisplayNames
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 
-class CreateRecipeUseCase(
-    private val recipeRepository: RecipeRepository,
-    private val itemRepository: ItemRepository,
-    private val transactionRunner: TransactionRunner,
-) {
+fun interface CreateRecipeUseCase {
     suspend operator fun invoke(
+        name: String,
+        status: RecipeStatus,
+        memo: String,
+        ingredients: List<IngredientInput>,
+    ): CreateRecipeResult
+}
+
+fun CreateRecipeUseCase(
+    recipeRepository: RecipeRepository,
+    itemRepository: ItemRepository,
+    transactionRunner: TransactionRunner,
+): CreateRecipeUseCase = object : CreateRecipeUseCase {
+    override suspend fun invoke(
         name: String,
         status: RecipeStatus,
         memo: String,

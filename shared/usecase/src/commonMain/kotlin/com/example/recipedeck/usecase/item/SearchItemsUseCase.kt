@@ -8,10 +8,14 @@ import com.example.recipedeck.domain.item.ItemRepositoryFailure
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
-class SearchItemsUseCase(
-    private val itemRepository: ItemRepository,
-) {
-    suspend operator fun invoke(keyword: String): SearchItemsResult {
+fun interface SearchItemsUseCase {
+    suspend operator fun invoke(keyword: String): SearchItemsResult
+}
+
+fun SearchItemsUseCase(
+    itemRepository: ItemRepository,
+): SearchItemsUseCase = object : SearchItemsUseCase {
+    override suspend fun invoke(keyword: String): SearchItemsResult {
         val searchKeyword = NotBlankString.of(keyword) ?: return SearchItemsResult.Found(persistentListOf())
 
         return when (val found = itemRepository.search(searchKeyword)) {

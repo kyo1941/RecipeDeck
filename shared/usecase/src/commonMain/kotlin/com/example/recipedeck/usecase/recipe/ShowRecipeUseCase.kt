@@ -18,12 +18,16 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
-class ShowRecipeUseCase(
-    private val recipeRepository: RecipeRepository,
-    private val itemRepository: ItemRepository,
-) {
+fun interface ShowRecipeUseCase {
+    operator fun invoke(recipeId: RecipeId): Flow<ShowRecipeResult>
+}
+
+fun ShowRecipeUseCase(
+    recipeRepository: RecipeRepository,
+    itemRepository: ItemRepository,
+): ShowRecipeUseCase = object : ShowRecipeUseCase {
     @OptIn(ExperimentalCoroutinesApi::class)
-    operator fun invoke(recipeId: RecipeId): Flow<ShowRecipeResult> =
+    override fun invoke(recipeId: RecipeId): Flow<ShowRecipeResult> =
         recipeRepository.observeById(recipeId).flatMapLatest { found ->
             when (found) {
                 is Outcome.Success -> found.value?.let(::observeWithItems) ?: flowOf(ShowRecipeResult.RecipeNoLongerExists)

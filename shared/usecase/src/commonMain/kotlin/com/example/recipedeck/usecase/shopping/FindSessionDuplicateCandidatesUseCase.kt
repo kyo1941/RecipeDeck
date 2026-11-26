@@ -8,10 +8,14 @@ import com.example.recipedeck.usecase.item.DuplicateCandidateFinderFailure
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
-class FindSessionDuplicateCandidatesUseCase(
-    private val duplicateCandidateFinder: DuplicateCandidateFinder,
-) {
-    suspend operator fun invoke(displayName: String): FindSessionDuplicateCandidatesResult {
+fun interface FindSessionDuplicateCandidatesUseCase {
+    suspend operator fun invoke(displayName: String): FindSessionDuplicateCandidatesResult
+}
+
+fun FindSessionDuplicateCandidatesUseCase(
+    duplicateCandidateFinder: DuplicateCandidateFinder,
+): FindSessionDuplicateCandidatesUseCase = object : FindSessionDuplicateCandidatesUseCase {
+    override suspend fun invoke(displayName: String): FindSessionDuplicateCandidatesResult {
         val typedDisplayName = NotBlankString.of(displayName)
             ?: return FindSessionDuplicateCandidatesResult.Found(persistentListOf())
 

@@ -16,12 +16,13 @@ import com.example.recipedeck.domain.recipe.RecipeStatus
 import com.example.recipedeck.usecase.ingredient.IngredientInput
 import com.example.recipedeck.usecase.ingredient.ItemInput
 import com.example.recipedeck.usecase.item.SearchItemsResult
+import com.example.recipedeck.usecase.item.SearchItemsUseCase
 import com.example.recipedeck.usecase.recipe.EditRecipeResult
 import com.example.recipedeck.usecase.recipe.ShowRecipeResult
+import com.example.recipedeck.usecase.recipe.ShowRecipeUseCase
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -65,15 +66,18 @@ class EditRecipeViewModelTest {
         ingredients = persistentListOf(ShowRecipeResult.Shown.Ingredient(pork, halfPiece)),
     )
 
+    private var editedRecipeId: RecipeId? = null
     private var editedIngredients: List<IngredientInput>? = null
 
     private fun viewModel(
-        shown: () -> Flow<ShowRecipeResult> = { flowOf(gingerPork) },
+        shown: ShowRecipeUseCase = ShowRecipeUseCase { flowOf(gingerPork) },
         result: EditRecipeResult = EditRecipeResult.Saved(persistentListOf()),
-        searchItems: suspend (String) -> SearchItemsResult = { SearchItemsResult.Found(persistentListOf()) },
+        searchItems: SearchItemsUseCase = SearchItemsUseCase { SearchItemsResult.Found(persistentListOf()) },
     ) = EditRecipeViewModel(
+        recipeId = gingerPork.recipe.id,
         showRecipe = shown,
-        editRecipe = { _, _, _, ingredients ->
+        editRecipe = { recipeId, _, _, _, ingredients ->
+            editedRecipeId = recipeId
             editedIngredients = ingredients
             result
         },
@@ -115,6 +119,15 @@ class EditRecipeViewModelTest {
 
         assertEquals(listOf(ItemInput.Selected(pork.id), ItemInput.Typed("玉ねぎ")), editedIngredients?.map { it.item })
         assertEquals(EditRecipeUiState.Closed, viewModel.uiState.value)
+    }
+
+    @Test
+    fun 開いたRecipeのIDで保存する() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.save()
+
+        assertEquals(gingerPork.recipe.id, editedRecipeId)
     }
 
     @Test

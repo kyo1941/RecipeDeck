@@ -21,13 +21,21 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.time.Clock
 
-class AddRecipeToShoppingSessionUseCase(
-    private val recipeRepository: RecipeRepository,
-    private val itemRepository: ItemRepository,
-    private val shoppingSessionRepository: ShoppingSessionRepository,
-    private val clock: Clock,
-) {
+fun interface AddRecipeToShoppingSessionUseCase {
     suspend operator fun invoke(
+        recipeId: RecipeId,
+        multiplier: Multiplier,
+        ingredients: List<SessionIngredientInput>,
+    ): AddRecipeToShoppingSessionResult
+}
+
+fun AddRecipeToShoppingSessionUseCase(
+    recipeRepository: RecipeRepository,
+    itemRepository: ItemRepository,
+    shoppingSessionRepository: ShoppingSessionRepository,
+    clock: Clock,
+): AddRecipeToShoppingSessionUseCase = object : AddRecipeToShoppingSessionUseCase {
+    override suspend fun invoke(
         recipeId: RecipeId,
         multiplier: Multiplier,
         ingredients: List<SessionIngredientInput>,

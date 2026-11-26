@@ -6,10 +6,10 @@ import co.touchlab.kermit.Logger
 import com.example.recipedeck.domain.recipe.RecipeId
 import com.example.recipedeck.domain.recipe.RecipeStatus
 import com.example.recipedeck.usecase.recipe.ShowRecipeListResult
+import com.example.recipedeck.usecase.recipe.ShowRecipeListUseCase
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class RecipeListViewModel(
-    showRecipeList: () -> Flow<ShowRecipeListResult>,
+    showRecipeList: ShowRecipeListUseCase,
     private val leftoverEdits: LeftoverRecipeEditStore,
 ) : ViewModel() {
     private val retryRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
