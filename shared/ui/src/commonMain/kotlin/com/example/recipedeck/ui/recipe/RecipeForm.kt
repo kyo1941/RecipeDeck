@@ -12,7 +12,7 @@ import com.example.recipedeck.ui.amount.quantityOrNull
 import com.example.recipedeck.ui.amount.editableText
 import com.example.recipedeck.usecase.ingredient.IngredientInput
 import com.example.recipedeck.usecase.ingredient.ItemInput
-import com.example.recipedeck.usecase.recipe.ShowRecipeResult
+import com.example.recipedeck.usecase.recipe.ObserveRecipeResult
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 
@@ -47,7 +47,7 @@ data class RecipeForm(
     companion object {
         fun empty() = RecipeForm(name = "", isDraft = false, memo = "", ingredients = IngredientListForm.of(listOf(IngredientForm.empty())))
 
-        fun of(shown: ShowRecipeResult.Shown) = RecipeForm(
+        fun of(shown: ObserveRecipeResult.Found) = RecipeForm(
             name = shown.recipe.name.value,
             isDraft = shown.recipe.status == RecipeStatus.DRAFT,
             memo = shown.recipe.memo?.value.orEmpty(),
@@ -138,7 +138,7 @@ data class IngredientForm(
 
         fun empty() = IngredientForm(name = "", selectedItemId = null, quantity = TextFieldValue(""), unit = null)
 
-        fun of(shown: ShowRecipeResult.Shown.Ingredient) = IngredientForm(
+        fun of(shown: ObserveRecipeResult.Found.Ingredient) = IngredientForm(
             name = shown.item.displayName.value,
             selectedItemId = shown.item.id,
             quantity = TextFieldValue(shown.amount?.let { it.quantity.editableText(it.notation) }.orEmpty()),

@@ -11,8 +11,8 @@ import com.example.recipedeck.usecase.item.SearchItemsResult
 import com.example.recipedeck.usecase.item.SearchItemsUseCase
 import com.example.recipedeck.usecase.recipe.EditRecipeResult
 import com.example.recipedeck.usecase.recipe.EditRecipeUseCase
-import com.example.recipedeck.usecase.recipe.ShowRecipeResult
-import com.example.recipedeck.usecase.recipe.ShowRecipeUseCase
+import com.example.recipedeck.usecase.recipe.ObserveRecipeResult
+import com.example.recipedeck.usecase.recipe.ObserveRecipeUseCase
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 
 class EditRecipeViewModel(
     private val recipeId: RecipeId,
-    private val showRecipe: ShowRecipeUseCase,
+    private val observeRecipe: ObserveRecipeUseCase,
     private val editRecipe: EditRecipeUseCase,
     private val searchItems: SearchItemsUseCase,
     private val leftoverEditKeeper: LeftoverRecipeEditKeeper,
@@ -107,11 +107,11 @@ class EditRecipeViewModel(
     override fun keepEditing() = updateEditor { it.copy(isConfirmingDiscard = false) }
 
     private suspend fun load() {
-        val next = when (val result = showRecipe(recipeId).first()) {
-            is ShowRecipeResult.Shown ->
+        val next = when (val result = observeRecipe(recipeId).first()) {
+            is ObserveRecipeResult.Found ->
                 EditRecipeUiState.Editing(RecipeEditorUiState.startingWith(RecipeForm.of(result)).copy(offeredLeftover = leftoverEditKeeper.read()))
-            ShowRecipeResult.RecipeNoLongerExists -> EditRecipeUiState.NoLongerExists
-            is ShowRecipeResult.Unexpected -> EditRecipeUiState.LoadFailed
+            ObserveRecipeResult.RecipeNoLongerExists -> EditRecipeUiState.NoLongerExists
+            is ObserveRecipeResult.Unexpected -> EditRecipeUiState.LoadFailed
                 .also { logger.e(result.cause) { "編集する Recipe を読み込めなかった" } }
         }
         if (_uiState.value != EditRecipeUiState.Loading) return

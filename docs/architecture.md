@@ -199,8 +199,9 @@ erDiagram
 
 ## UseCase の方針
 
-- 操作（アクション）ごとに1クラスを定義し、単一の `suspend operator fun invoke` を持たせる。画面構成の変更が UseCase に波及しないよう、画面単位でのクラス設計は行わない
+- 操作（アクション）ごとに1つ定義し、単一の `suspend operator fun invoke` を持たせる（形は「UI の方針」）。画面構成の変更が UseCase に波及しないよう、画面単位でのクラス設計は行わない
   - 表示し続ける読み出し（Recipe の一覧、買い物リスト）は、`suspend` にせず、結果の `Flow` を返す `operator fun invoke` にする。保存されるたびに新しい結果を流し、画面は読み直しを指示しない（「UI の方針」）
+  - 名前は、表示し続ける読み出しを `Observe〜`、1回だけ読むものを `Get〜` か `Find〜` にする。`Show〜` のような画面がすることを表す名前にはしない。表示し続ける読み出しの成功の結果は、中身の名詞で `Found`（1件）と `Listed`（一覧）にする
 - ViewModel の `viewModelScope` から呼び出す。CMP では iOS も共通コード上の ViewModel から呼び出すため、Android と同様の設計となる
 - UseCase 内部ではディスパッチャ（スレッド）の切り替えを行わない。必要であれば Repository の実装側で切り替える
 - 結果は UseCase ごとの sealed interface で返却する。ViewModel は例外を catch せず、結果を UiState に変換するだけにとどめる（「UI の方針」）
@@ -366,12 +367,12 @@ Item 作成 UseCase は、重複候補をいつユーザーに見せるか（入
 追加のたびに Session 内の Recipe を1つ作り、同じ品目の SessionItem は使い回す。この組み立ては `ShoppingSession.withAddedRecipe` が行い、UseCase は入力の検証、Recipe の取得、名前と既存の Item との照合、保存を受け持つ。
 既存の Item を選んだ材料は、Item から表示名を写す。選んだ Item が見つからなければ、何も追加せずに材料の位置を返す（今は Item の削除がないので起きない）。
 
-11 は、進行中の Session の買い物リストを返す UseCase（`ShowShoppingListUseCase`）を実装済み。
+11 は、進行中の Session の買い物リストを返す UseCase（`ObserveShoppingListUseCase`。当時の名前は `ShowShoppingListUseCase`）を実装済み。
 進行中の Session がなければ、他に何も読まずに `NoActiveSession` を返す。
 買い物リストは domain の `ShoppingSession.toShoppingList()` が作り、UseCase は Session を読む（表示名は Session が持つので、Item は読まない。購入の記録を読むのは 12 で足した）。
 手動追加の操作はまだないので、手動追加の内訳は、読み戻しの生成関数（`ShoppingSession.of`。16-3 で足した）で作った Session でテストしている。手動追加が内訳の最後に並ぶことと、手動追加だけの品目も買い物項目になることを、`toShoppingList()` を通して確かめている。
 
-12 では、`ShowShoppingListUseCase` が、進行中の Session に続けてその Session の購入の記録を読み、購入済みの内訳 ID を `toShoppingList` に渡すようにした。
+12 では、`ObserveShoppingListUseCase` が、進行中の Session に続けてその Session の購入の記録を読み、購入済みの内訳 ID を `toShoppingList` に渡すようにした。
 購入の記録が読めなければ、買い物リストを返さずに `Unexpected` を返す（今の決定）。購入状態の見えない買い物リストを見せても解決にならないためである。購入の記録だけが読めない失敗は、データベースのファイルの一部が壊れたときに限られることを 16-3 で確かめた（「データ層の方針」）。その場合も、購入状態の見えない買い物リストを見せないという理由は変わらないので、この扱いのままにする。
 買い物項目を購入済み／未購入にする UseCase（`MarkShoppingListItemPurchasedUseCase`）は、品目（SessionItem の ID）と、付けたい値を受け取る。反転ではなく値を受け取るので、同じ要求を繰り返しても状態がずれない。
 進行中の Session と購入の記録を読んで買い物リストを作り、その品目の買う内訳（`sourcesToBuy`）の ID を、購入の記録の Repository に1回で書く。
@@ -530,7 +531,7 @@ DI のグラフに、Session の Repository の具象、`Clock`（`Clock.System`
 Item 単独の画面を代表フローの後に置くのは、材料の入力で Item が作られるので、代表フローには要らないためである。誤字で作った Item は、17-7 までは直せない。
 重複候補の呼び出しは、この中には入れず、`DuplicateCandidateFinder` の AI の具象を入れるときに作る。今の Finder は候補を返さないので、候補の表示を画面で確かめられないためである。
 
-17-1 では、グラフを実行時に作り、両 OS でデータベースを開いて `ShowShoppingListUseCase` の結果を画面に出すところまでを作った。決めたことは「技術構成」と「UI の方針」に書いた。
+17-1 では、グラフを実行時に作り、両 OS でデータベースを開いて `ObserveShoppingListUseCase` の結果を画面に出すところまでを作った。決めたことは「技術構成」と「UI の方針」に書いた。
 製品のデータベースに、表と進行中の Session を1件に保つトリガーが作られることを、Android のエミュレータと iOS のシミュレータで確かめた。
 買い物リストの ViewModel と画面は、17-5 で育てる。
 

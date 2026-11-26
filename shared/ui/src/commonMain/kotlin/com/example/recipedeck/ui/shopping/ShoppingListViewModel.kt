@@ -3,8 +3,8 @@ package com.example.recipedeck.ui.shopping
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
-import com.example.recipedeck.usecase.shopping.ShowShoppingListResult
-import com.example.recipedeck.usecase.shopping.ShowShoppingListUseCase
+import com.example.recipedeck.usecase.shopping.ObserveShoppingListResult
+import com.example.recipedeck.usecase.shopping.ObserveShoppingListUseCase
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -18,15 +18,15 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 
 class ShoppingListViewModel(
-    showShoppingList: ShowShoppingListUseCase,
+    observeShoppingList: ObserveShoppingListUseCase,
 ) : ViewModel() {
     private val retryRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<ShoppingListUiState> = retryRequests
         .onStart { emit(Unit) }
-        .flatMapLatest { showShoppingList() }
-        .onEach { if (it is ShowShoppingListResult.Unexpected) logger.e(it.cause) { "買い物リストを読み込めなかった" } }
+        .flatMapLatest { observeShoppingList() }
+        .onEach { if (it is ObserveShoppingListResult.Unexpected) logger.e(it.cause) { "買い物リストを読み込めなかった" } }
         .map { it.toUiState() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), ShoppingListUiState.Loading)
 
@@ -47,8 +47,8 @@ sealed interface ShoppingListUiState {
     data object LoadFailed : ShoppingListUiState
 }
 
-private fun ShowShoppingListResult.toUiState(): ShoppingListUiState = when (this) {
-    is ShowShoppingListResult.Shown -> ShoppingListUiState.Shown(items.map { it.displayName.value }.toImmutableList())
-    ShowShoppingListResult.NoActiveSession -> ShoppingListUiState.NoActiveSession
-    is ShowShoppingListResult.Unexpected -> ShoppingListUiState.LoadFailed
+private fun ObserveShoppingListResult.toUiState(): ShoppingListUiState = when (this) {
+    is ObserveShoppingListResult.Listed -> ShoppingListUiState.Shown(items.map { it.displayName.value }.toImmutableList())
+    ObserveShoppingListResult.NoActiveSession -> ShoppingListUiState.NoActiveSession
+    is ObserveShoppingListResult.Unexpected -> ShoppingListUiState.LoadFailed
 }

@@ -11,7 +11,7 @@ import com.example.recipedeck.domain.recipe.Recipe
 import com.example.recipedeck.domain.recipe.RecipeId
 import com.example.recipedeck.domain.recipe.RecipeIngredient
 import com.example.recipedeck.domain.recipe.RecipeStatus
-import com.example.recipedeck.usecase.recipe.ShowRecipeResult
+import com.example.recipedeck.usecase.recipe.ObserveRecipeResult
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
@@ -48,8 +48,8 @@ class RecipeViewModelTest {
     private val ginger = Item(ItemId("item-ginger"), notBlank("生姜"))
     private val porkAmount = Amount(Quantity.of(200) ?: fail("数量が作れない"), QuantityNotation.DECIMAL, AmountUnit.GRAM)
 
-    private fun shown(status: RecipeStatus = RecipeStatus.READY, memo: String? = null, ingredients: List<ShowRecipeResult.Shown.Ingredient> = emptyList()) =
-        ShowRecipeResult.Shown(
+    private fun shown(status: RecipeStatus = RecipeStatus.READY, memo: String? = null, ingredients: List<ObserveRecipeResult.Found.Ingredient> = emptyList()) =
+        ObserveRecipeResult.Found(
             recipe = Recipe(
                 id = RecipeId("recipe-1"),
                 name = notBlank("生姜焼き"),
@@ -67,8 +67,8 @@ class RecipeViewModelTest {
 
     @Test
     fun 最初の結果が届くまでは読み込み中になる() = runTest {
-        val results = MutableSharedFlow<ShowRecipeResult>()
-        val viewModel = RecipeViewModel(recipeId = RecipeId("recipe-1"), showRecipe = { results })
+        val results = MutableSharedFlow<ObserveRecipeResult>()
+        val viewModel = RecipeViewModel(recipeId = RecipeId("recipe-1"), observeRecipe = { results })
         subscribe(viewModel)
 
         assertEquals(RecipeUiState.Loading, viewModel.uiState.value)
@@ -80,8 +80,8 @@ class RecipeViewModelTest {
 
     @Test
     fun 材料を並びのまま表示名と分量にしメモも持つ() = runTest {
-        val result = shown(memo = "強火で焼く", ingredients = listOf(ShowRecipeResult.Shown.Ingredient(pork, porkAmount), ShowRecipeResult.Shown.Ingredient(ginger, null)))
-        val viewModel = RecipeViewModel(recipeId = RecipeId("recipe-1"), showRecipe = { flowOf(result) })
+        val result = shown(memo = "強火で焼く", ingredients = listOf(ObserveRecipeResult.Found.Ingredient(pork, porkAmount), ObserveRecipeResult.Found.Ingredient(ginger, null)))
+        val viewModel = RecipeViewModel(recipeId = RecipeId("recipe-1"), observeRecipe = { flowOf(result) })
         subscribe(viewModel)
 
         val expected = RecipeUiState.Shown(
@@ -95,7 +95,7 @@ class RecipeViewModelTest {
 
     @Test
     fun 下書きのRecipeはそのことを状態に持つ() = runTest {
-        val viewModel = RecipeViewModel(recipeId = RecipeId("recipe-1"), showRecipe = { flowOf(shown(status = RecipeStatus.DRAFT)) })
+        val viewModel = RecipeViewModel(recipeId = RecipeId("recipe-1"), observeRecipe = { flowOf(shown(status = RecipeStatus.DRAFT)) })
         subscribe(viewModel)
 
         assertEquals(RecipeUiState.Shown("生姜焼き", isDraft = true, ingredients = persistentListOf(), memo = null), viewModel.uiState.value)
@@ -103,7 +103,7 @@ class RecipeViewModelTest {
 
     @Test
     fun Recipeが見つからなければそのことを状態にする() = runTest {
-        val viewModel = RecipeViewModel(recipeId = RecipeId("recipe-1"), showRecipe = { flowOf(ShowRecipeResult.RecipeNoLongerExists) })
+        val viewModel = RecipeViewModel(recipeId = RecipeId("recipe-1"), observeRecipe = { flowOf(ObserveRecipeResult.RecipeNoLongerExists) })
         subscribe(viewModel)
 
         assertEquals(RecipeUiState.NoLongerExists, viewModel.uiState.value)
@@ -111,7 +111,7 @@ class RecipeViewModelTest {
 
     @Test
     fun 読み込みに失敗したらそのことを状態にする() = runTest {
-        val viewModel = RecipeViewModel(recipeId = RecipeId("recipe-1"), showRecipe = { flowOf(ShowRecipeResult.Unexpected(IllegalStateException())) })
+        val viewModel = RecipeViewModel(recipeId = RecipeId("recipe-1"), observeRecipe = { flowOf(ObserveRecipeResult.Unexpected(IllegalStateException())) })
         subscribe(viewModel)
 
         assertEquals(RecipeUiState.LoadFailed, viewModel.uiState.value)
@@ -122,9 +122,9 @@ class RecipeViewModelTest {
         var calls = 0
         val viewModel = RecipeViewModel(
             recipeId = RecipeId("recipe-1"),
-            showRecipe = {
+            observeRecipe = {
                 calls++
-                if (calls == 1) flowOf(ShowRecipeResult.Unexpected(IllegalStateException())) else flowOf(shown())
+                if (calls == 1) flowOf(ObserveRecipeResult.Unexpected(IllegalStateException())) else flowOf(shown())
             },
         )
         subscribe(viewModel)

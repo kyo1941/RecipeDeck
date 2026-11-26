@@ -18,55 +18,55 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
-fun interface ShowRecipeUseCase {
-    operator fun invoke(recipeId: RecipeId): Flow<ShowRecipeResult>
+fun interface ObserveRecipeUseCase {
+    operator fun invoke(recipeId: RecipeId): Flow<ObserveRecipeResult>
 }
 
-fun ShowRecipeUseCase(
+fun ObserveRecipeUseCase(
     recipeRepository: RecipeRepository,
     itemRepository: ItemRepository,
-): ShowRecipeUseCase = object : ShowRecipeUseCase {
+): ObserveRecipeUseCase = object : ObserveRecipeUseCase {
     @OptIn(ExperimentalCoroutinesApi::class)
-    override fun invoke(recipeId: RecipeId): Flow<ShowRecipeResult> =
+    override fun invoke(recipeId: RecipeId): Flow<ObserveRecipeResult> =
         recipeRepository.observeById(recipeId).flatMapLatest { found ->
             when (found) {
-                is Outcome.Success -> found.value?.let(::observeWithItems) ?: flowOf(ShowRecipeResult.RecipeNoLongerExists)
-                is Outcome.Failure -> flowOf(found.error.toShowRecipeResult())
+                is Outcome.Success -> found.value?.let(::observeWithItems) ?: flowOf(ObserveRecipeResult.RecipeNoLongerExists)
+                is Outcome.Failure -> flowOf(found.error.toObserveRecipeResult())
             }
         }
 
-    private fun observeWithItems(recipe: Recipe): Flow<ShowRecipeResult> =
+    private fun observeWithItems(recipe: Recipe): Flow<ObserveRecipeResult> =
         itemRepository.observeByIds(recipe.ingredients.map { it.itemId }.toSet()).map { found ->
             when (found) {
-                is Outcome.Success -> recipe.toShown(found.value.associateBy { it.id })
-                is Outcome.Failure -> found.error.toShowRecipeResult()
+                is Outcome.Success -> recipe.toFound(found.value.associateBy { it.id })
+                is Outcome.Failure -> found.error.toObserveRecipeResult()
             }
         }
 
-    private fun Recipe.toShown(itemsById: Map<ItemId, Item>): ShowRecipeResult {
+    private fun Recipe.toFound(itemsById: Map<ItemId, Item>): ObserveRecipeResult {
         val ingredients = ingredients.map { ingredient ->
             val item = itemsById[ingredient.itemId]
-                ?: return ShowRecipeResult.Unexpected(
+                ?: return ObserveRecipeResult.Unexpected(
                     IllegalStateException("Recipe ${id.value} の材料が指す Item ${ingredient.itemId.value} が見つからない"),
                 )
-            ShowRecipeResult.Shown.Ingredient(item, ingredient.amount)
+            ObserveRecipeResult.Found.Ingredient(item, ingredient.amount)
         }
-        return ShowRecipeResult.Shown(this, ingredients.toImmutableList())
+        return ObserveRecipeResult.Found(this, ingredients.toImmutableList())
     }
 
-    private fun RecipeRepositoryFailure.toShowRecipeResult(): ShowRecipeResult = when (this) {
-        is RecipeRepositoryFailure.Unexpected -> ShowRecipeResult.Unexpected(cause)
+    private fun RecipeRepositoryFailure.toObserveRecipeResult(): ObserveRecipeResult = when (this) {
+        is RecipeRepositoryFailure.Unexpected -> ObserveRecipeResult.Unexpected(cause)
     }
 
-    private fun ItemRepositoryFailure.toShowRecipeResult(): ShowRecipeResult = when (this) {
-        is ItemRepositoryFailure.Unexpected -> ShowRecipeResult.Unexpected(cause)
+    private fun ItemRepositoryFailure.toObserveRecipeResult(): ObserveRecipeResult = when (this) {
+        is ItemRepositoryFailure.Unexpected -> ObserveRecipeResult.Unexpected(cause)
     }
 }
 
-sealed interface ShowRecipeResult {
-    data class Shown(val recipe: Recipe, val ingredients: ImmutableList<Ingredient>) : ShowRecipeResult {
+sealed interface ObserveRecipeResult {
+    data class Found(val recipe: Recipe, val ingredients: ImmutableList<Ingredient>) : ObserveRecipeResult {
         data class Ingredient(val item: Item, val amount: Amount?)
     }
-    data object RecipeNoLongerExists : ShowRecipeResult
-    data class Unexpected(val cause: Throwable) : ShowRecipeResult
+    data object RecipeNoLongerExists : ObserveRecipeResult
+    data class Unexpected(val cause: Throwable) : ObserveRecipeResult
 }

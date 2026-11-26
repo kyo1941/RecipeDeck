@@ -22,10 +22,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
-class ShowRecipeUseCaseTest {
+class ObserveRecipeUseCaseTest {
     private val recipeRepository = FakeRecipeRepository()
     private val itemRepository = FakeItemRepository()
-    private val showRecipe = ShowRecipeUseCase(recipeRepository, itemRepository)
+    private val observeRecipe = ObserveRecipeUseCase(recipeRepository, itemRepository)
 
     private val pork = Item(ItemId("item-pork"), notBlankStringOrFail("豚肉"))
     private val onion = Item(ItemId("item-onion"), notBlankStringOrFail("たまねぎ"))
@@ -45,20 +45,20 @@ class ShowRecipeUseCaseTest {
         val gingerPork = recipe(onion, pork)
         recipeRepository.savedRecipes += gingerPork
 
-        val expected = ShowRecipeResult.Shown(gingerPork, persistentListOf(ShowRecipeResult.Shown.Ingredient(onion, null), ShowRecipeResult.Shown.Ingredient(pork, null)))
-        assertEquals(expected, showRecipe(RecipeId("recipe-1")).first())
+        val expected = ObserveRecipeResult.Found(gingerPork, persistentListOf(ObserveRecipeResult.Found.Ingredient(onion, null), ObserveRecipeResult.Found.Ingredient(pork, null)))
+        assertEquals(expected, observeRecipe(RecipeId("recipe-1")).first())
     }
 
     @Test
     fun Recipeがなければ見つからないことを返す() = runTest {
-        assertEquals(ShowRecipeResult.RecipeNoLongerExists, showRecipe(RecipeId("recipe-1")).first())
+        assertEquals(ObserveRecipeResult.RecipeNoLongerExists, observeRecipe(RecipeId("recipe-1")).first())
     }
 
     @Test
     fun 材料が指すItemが見つからなければ予期しない失敗を返す() = runTest {
         recipeRepository.savedRecipes += recipe(pork)
 
-        assertIs<ShowRecipeResult.Unexpected>(showRecipe(RecipeId("recipe-1")).first())
+        assertIs<ObserveRecipeResult.Unexpected>(observeRecipe(RecipeId("recipe-1")).first())
     }
 
     @Test
@@ -66,7 +66,7 @@ class ShowRecipeUseCaseTest {
         val cause = IllegalStateException("保存先から読み込めない")
         recipeRepository.findFailure = RecipeRepositoryFailure.Unexpected(cause)
 
-        assertEquals(ShowRecipeResult.Unexpected(cause), showRecipe(RecipeId("recipe-1")).first())
+        assertEquals(ObserveRecipeResult.Unexpected(cause), observeRecipe(RecipeId("recipe-1")).first())
     }
 
     @Test
@@ -75,7 +75,7 @@ class ShowRecipeUseCaseTest {
         val cause = IllegalStateException("保存先から読み込めない")
         itemRepository.findFailure = ItemRepositoryFailure.Unexpected(cause)
 
-        assertEquals(ShowRecipeResult.Unexpected(cause), showRecipe(RecipeId("recipe-1")).first())
+        assertEquals(ObserveRecipeResult.Unexpected(cause), observeRecipe(RecipeId("recipe-1")).first())
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -83,13 +83,13 @@ class ShowRecipeUseCaseTest {
     fun Recipeが保存されると返し直す() = runTest {
         itemRepository.savedItems += listOf(pork, onion)
         recipeRepository.savedRecipes += recipe(pork)
-        val results = mutableListOf<ShowRecipeResult>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { showRecipe(RecipeId("recipe-1")).toList(results) }
+        val results = mutableListOf<ObserveRecipeResult>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { observeRecipe(RecipeId("recipe-1")).toList(results) }
 
         val edited = recipe(pork, onion)
         recipeRepository.save(edited)
 
-        val expected = ShowRecipeResult.Shown(edited, persistentListOf(ShowRecipeResult.Shown.Ingredient(pork, null), ShowRecipeResult.Shown.Ingredient(onion, null)))
+        val expected = ObserveRecipeResult.Found(edited, persistentListOf(ObserveRecipeResult.Found.Ingredient(pork, null), ObserveRecipeResult.Found.Ingredient(onion, null)))
         assertEquals(expected, results.last())
     }
 
@@ -99,12 +99,12 @@ class ShowRecipeUseCaseTest {
         itemRepository.savedItems += pork
         val gingerPork = recipe(pork)
         recipeRepository.savedRecipes += gingerPork
-        val results = mutableListOf<ShowRecipeResult>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { showRecipe(RecipeId("recipe-1")).toList(results) }
+        val results = mutableListOf<ObserveRecipeResult>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { observeRecipe(RecipeId("recipe-1")).toList(results) }
 
         val renamed = pork.copy(displayName = notBlankStringOrFail("豚こま肉"))
         itemRepository.save(renamed)
 
-        assertEquals(ShowRecipeResult.Shown(gingerPork, persistentListOf(ShowRecipeResult.Shown.Ingredient(renamed, null))), results.last())
+        assertEquals(ObserveRecipeResult.Found(gingerPork, persistentListOf(ObserveRecipeResult.Found.Ingredient(renamed, null))), results.last())
     }
 }

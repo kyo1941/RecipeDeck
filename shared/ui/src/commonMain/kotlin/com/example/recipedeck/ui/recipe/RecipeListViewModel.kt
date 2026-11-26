@@ -5,8 +5,8 @@ import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
 import com.example.recipedeck.domain.recipe.RecipeId
 import com.example.recipedeck.domain.recipe.RecipeStatus
-import com.example.recipedeck.usecase.recipe.ShowRecipeListResult
-import com.example.recipedeck.usecase.recipe.ShowRecipeListUseCase
+import com.example.recipedeck.usecase.recipe.ObserveRecipeListResult
+import com.example.recipedeck.usecase.recipe.ObserveRecipeListUseCase
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class RecipeListViewModel(
-    showRecipeList: ShowRecipeListUseCase,
+    observeRecipeList: ObserveRecipeListUseCase,
     private val leftoverEdits: LeftoverRecipeEditStore,
 ) : ViewModel() {
     private val retryRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -29,8 +29,8 @@ class RecipeListViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<RecipeListUiState> = retryRequests
         .onStart { emit(Unit) }
-        .flatMapLatest { showRecipeList() }
-        .onEach { if (it is ShowRecipeListResult.Unexpected) logger.e(it.cause) { "Recipe の一覧を読み込めなかった" } }
+        .flatMapLatest { observeRecipeList() }
+        .onEach { if (it is ObserveRecipeListResult.Unexpected) logger.e(it.cause) { "Recipe の一覧を読み込めなかった" } }
         .map { it.toUiState() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), RecipeListUiState.Loading)
 
@@ -65,8 +65,8 @@ data class RecipeListItem(
     val isDraft: Boolean,
 )
 
-private fun ShowRecipeListResult.toUiState(): RecipeListUiState = when (this) {
-    is ShowRecipeListResult.Shown -> if (recipes.isEmpty()) {
+private fun ObserveRecipeListResult.toUiState(): RecipeListUiState = when (this) {
+    is ObserveRecipeListResult.Listed -> if (recipes.isEmpty()) {
         RecipeListUiState.NoRecipes
     } else {
         RecipeListUiState.Shown(
@@ -76,5 +76,5 @@ private fun ShowRecipeListResult.toUiState(): RecipeListUiState = when (this) {
                 .toImmutableList(),
         )
     }
-    is ShowRecipeListResult.Unexpected -> RecipeListUiState.LoadFailed
+    is ObserveRecipeListResult.Unexpected -> RecipeListUiState.LoadFailed
 }
