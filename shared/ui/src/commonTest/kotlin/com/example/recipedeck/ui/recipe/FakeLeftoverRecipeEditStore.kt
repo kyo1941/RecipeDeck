@@ -11,7 +11,6 @@ class FakeLeftoverRecipeEditStore(vararg initial: Pair<LeftoverRecipeEditKey, Le
     var writes = 0
         private set
 
-    // 書いた後、呼び出し側に戻るまでを待たせる。待っている間に取り消されても、書いた値は残る。
     var afterWrite: CompletableDeferred<Unit>? = null
     var failsWrites = false
 
