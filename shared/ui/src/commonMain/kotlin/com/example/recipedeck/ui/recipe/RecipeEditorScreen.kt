@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -207,12 +209,20 @@ private fun RecipeEditorForm(editor: RecipeEditorUiState, actions: RecipeEditorA
         }
         item {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = editor.form.isDraft,
+                        enabled = isEditable,
+                        role = Role.Switch,
+                        onValueChange = { actions.changeDraft(it) },
+                    )
+                    .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(stringResource(Res.string.recipe_editor_draft))
-                Switch(checked = editor.form.isDraft, onCheckedChange = { actions.changeDraft(it) }, enabled = isEditable)
+                Switch(checked = editor.form.isDraft, onCheckedChange = null, enabled = isEditable)
             }
         }
         item {
