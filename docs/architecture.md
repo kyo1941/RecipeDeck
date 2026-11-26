@@ -281,6 +281,11 @@ erDiagram
 - UseCase の結果を UiState に変えるのは ViewModel で、間に層を挟まない。別の層が要るのは、同じ変換をプラットフォームごとに別々の ViewModel へ渡す場面だが、Compose Multiplatform では ViewModel が共通なので、その場面はない。どう使うかは画面ごとの責務なので、結果への反応を1か所にまとめない
   - 変換は、ViewModel の状態を読まず、UseCase の結果と入力だけから UiState を作る関数にする。同じ変換が複数の画面で要るようになったら、ViewModel の外へ移す。移しても UseCase と画面は変わらない
   - 複数の画面で使う表示の処理（分量を文字にするなど）は、`:shared:ui` の関数にする
+- 入力の多い画面（Recipe の作成・編集）の UiState は、data class のプライマリコンストラクタの値と、そこから導出される値で持ち、画面は導出される値を読む。17-3 で、規則を ViewModel の関数ごとの分岐に置いた結果、同じ判定が何か所にも書かれ、ずれたためである
+  - 変えてよいかの規則と移り変わり（保存中は入力を変えない、変更があれば閉じる前に確かめる、など）は data class の関数に置く。ViewModel の関数は、その関数を呼ぶか `copy` するだけで、自分では分岐しない。規則がない変更（帯を消す、など）は直接 `copy` する
+  - 導出の元にしかならない値は private にし、使う側が導出される値を読むことをコンパイラで守る
+  - 1回だけ起こす処理（保存、読み込み、閉じるときの残った編集の確定）は、ViewModel の関数が data class の関数の結果を見て直接起こす。今の状態に追いかけて合わせたいもの（編集中の残った編集の書き込み、Item の候補の検索）だけを `StateFlow` の監視で動かす。`StateFlow` は今の状態を持つものなので、1回だけの出来事を運ぶと、続けて変わった値がまとめられて落ちる（保存できない入力の直後に同じ入力で保存を押すと、保存が始まらなかった）
+  - 画面を抜けることは、UiState の `Closed` で表し、画面がそれを見て遷移の関数を呼ぶ。ViewModel から画面への1回だけの出来事は、通知ではなく状態で渡す（[UI events](https://developer.android.com/topic/architecture/ui-layer/events)）。通知では、画面が受け取れない間の出来事が失われうるためである
 - ViewModel は UseCase を関数型で受け取る。`:shared:app` が UseCase の `invoke` を渡し、テストは結果を返すラムダを渡す。UseCase は `invoke` を1つだけ持つので、関数型はその形をそのまま書いた口になる
   - UseCase に interface を設ける形に移すのは、次の場面が出たときとする。同じ型の引数の取り違えが問題になる（関数型では呼ぶときに引数の名前を使えない。今は `EditRecipeUseCase` の `name` と `memo` だけで、ViewModel のテストで確かめる）、本番で UseCase の実装を差し替える。移すときに変わるのは、ViewModel のコンストラクタの型と `:shared:app` の渡し方だけである
 - 画面が ViewModel を受け取る口は、`:shared:ui` の `ScreenViewModels` に置き、`AppGraph` が継ぐ。`:shared:ui` からグラフは見えないためである（「モジュール構成」）。画面は `viewModel { viewModels.… }` で受けるので、ViewModel を作るのはストアに無いときだけになる。Android の画面の回転でも作り直されない
