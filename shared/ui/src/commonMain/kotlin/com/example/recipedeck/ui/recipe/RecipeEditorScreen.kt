@@ -38,12 +38,17 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.recipedeck.domain.NotBlankString
 import com.example.recipedeck.domain.amount.AmountUnit
 import com.example.recipedeck.domain.item.Item
+import com.example.recipedeck.domain.item.ItemId
 import com.example.recipedeck.ui.CenteredContent
 import com.example.recipedeck.ui.LoadFailedContent
+import com.example.recipedeck.ui.ScreenPreview
 import com.example.recipedeck.ui.amount.unitText
 import com.example.recipedeck.ui.navigation.ModalBackHandler
 import com.example.recipedeck.ui.navigation.ModalCloseButton
@@ -78,49 +83,57 @@ import kotlinx.collections.immutable.toImmutableList
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
-fun CreateRecipeScreen(viewModel: CreateRecipeViewModel, onClosed: () -> Unit, modifier: Modifier = Modifier) {
+fun CreateRecipeScreenHolder(viewModel: CreateRecipeViewModel, onClosed: () -> Unit, modifier: Modifier = Modifier) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState) {
         if (uiState == CreateRecipeUiState.Closed) onClosed()
     }
-    val editor = (uiState as? CreateRecipeUiState.Editing)?.editor
-    ModalBackHandler(onCloseRequest = viewModel::requestClose)
+    CreateRecipeScreen(uiState, actions = viewModel, modifier = modifier)
+}
+
+@Composable
+fun CreateRecipeScreen(uiState: CreateRecipeUiState, actions: RecipeEditorActions, modifier: Modifier = Modifier) {
+    ModalBackHandler(onCloseRequest = actions::requestClose)
 
     RecipeEditorFrame(
         title = stringResource(Res.string.recipe_editor_title_create),
-        editor = editor,
-        actions = viewModel,
+        editor = (uiState as? CreateRecipeUiState.Editing)?.editor,
+        actions = actions,
         modifier = modifier,
     ) { contentModifier ->
-        when (val state = uiState) {
+        when (uiState) {
             CreateRecipeUiState.Loading, CreateRecipeUiState.Closed -> CenteredContent(contentModifier) { CircularProgressIndicator() }
-            is CreateRecipeUiState.Editing -> RecipeEditorForm(state.editor, viewModel, contentModifier)
+            is CreateRecipeUiState.Editing -> RecipeEditorForm(uiState.editor, actions, contentModifier)
         }
     }
 }
 
 @Composable
-fun EditRecipeScreen(viewModel: EditRecipeViewModel, onClosed: () -> Unit, modifier: Modifier = Modifier) {
+fun EditRecipeScreenHolder(viewModel: EditRecipeViewModel, onClosed: () -> Unit, modifier: Modifier = Modifier) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState) {
         if (uiState == EditRecipeUiState.Closed) onClosed()
     }
-    val editor = (uiState as? EditRecipeUiState.Editing)?.editor
-    ModalBackHandler(onCloseRequest = viewModel::requestClose)
+    EditRecipeScreen(uiState, actions = viewModel, onRetry = viewModel::retry, modifier = modifier)
+}
+
+@Composable
+fun EditRecipeScreen(uiState: EditRecipeUiState, actions: RecipeEditorActions, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    ModalBackHandler(onCloseRequest = actions::requestClose)
 
     RecipeEditorFrame(
         title = stringResource(Res.string.recipe_editor_title_edit),
-        editor = editor,
-        actions = viewModel,
+        editor = (uiState as? EditRecipeUiState.Editing)?.editor,
+        actions = actions,
         modifier = modifier,
     ) { contentModifier ->
-        when (val state = uiState) {
+        when (uiState) {
             EditRecipeUiState.Loading, EditRecipeUiState.Closed -> CenteredContent(contentModifier) { CircularProgressIndicator() }
-            EditRecipeUiState.LoadFailed -> LoadFailedContent(stringResource(Res.string.recipe_load_failed), viewModel::retry, contentModifier)
+            EditRecipeUiState.LoadFailed -> LoadFailedContent(stringResource(Res.string.recipe_load_failed), onRetry, contentModifier)
             EditRecipeUiState.NoLongerExists -> CenteredContent(contentModifier) { Text(stringResource(Res.string.recipe_no_longer_exists)) }
-            is EditRecipeUiState.Editing -> RecipeEditorForm(state.editor, viewModel, contentModifier)
+            is EditRecipeUiState.Editing -> RecipeEditorForm(uiState.editor, actions, contentModifier)
         }
     }
 }
@@ -384,3 +397,173 @@ private fun unitLabel(unit: AmountUnit?): String = unit?.let { unitText(it) } ?:
 
 private const val MAX_SHOWN_FOUND_ITEMS = 5
 private val FOUND_ITEMS_BAND_HEIGHT = 48.dp
+
+@Preview
+@Composable
+private fun CreateRecipeScreenEmptyPreview() {
+    ScreenPreview {
+        CreateRecipeScreen(CreateRecipeUiState.Editing(RecipeEditorUiState.startingWith(RecipeForm.empty())), PreviewRecipeEditorActions)
+    }
+}
+
+@Preview
+@Composable
+private fun CreateRecipeScreenRequiredPreview() {
+    val form = RecipeForm.empty().copy(
+        ingredients = IngredientListForm.of(listOf(IngredientForm.empty().copy(quantity = TextFieldValue("1/2")))),
+    )
+    val rejected = checkNotNull(RecipeEditorUiState.startingWith(form).saveRequested()?.saveRejected()) { "保存中でなければ、保存を始められるはず" }
+    ScreenPreview {
+        CreateRecipeScreen(CreateRecipeUiState.Editing(rejected), PreviewRecipeEditorActions)
+    }
+}
+
+@Preview
+@Composable
+private fun CreateRecipeScreenItemCandidatesPreview() {
+    val typing = RecipeEditorUiState.startingWith(RecipeForm.empty().copy(name = "生姜焼き")).withIngredientNameChanged(key = 0, name = "豚")
+    val query = checkNotNull(typing.itemQuery) { "材料の名前を打ったら、候補を探すはず" }
+    val items = listOf("豚こま肉", "豚バラ肉", "豚ひき肉").mapIndexedNotNull { index, name ->
+        NotBlankString.of(name)?.let { Item(ItemId("item-$index"), it) }
+    }
+    val editor = typing.copy(foundItems = FoundItems(query, items.toImmutableList()))
+    ScreenPreview {
+        CreateRecipeScreen(CreateRecipeUiState.Editing(editor), PreviewRecipeEditorActions)
+    }
+}
+
+@Preview
+@Composable
+private fun CreateRecipeScreenLeftoverPreview() {
+    ScreenPreview {
+        val editor = RecipeEditorUiState.startingWith(RecipeForm.empty()).copy(offeredLeftover = RecipeForm.empty().copy(name = "生姜焼き"))
+        CreateRecipeScreen(CreateRecipeUiState.Editing(editor), PreviewRecipeEditorActions)
+    }
+}
+
+@Preview
+@Composable
+private fun CreateRecipeScreenSaveFailedPreview() {
+    val failed = checkNotNull(RecipeEditorUiState.startingWith(RecipeForm.empty().copy(name = "生姜焼き")).saveRequested()?.saveFailed()) { "保存中でなければ、保存を始められるはず" }
+    ScreenPreview {
+        CreateRecipeScreen(CreateRecipeUiState.Editing(failed), PreviewRecipeEditorActions)
+    }
+}
+
+@Preview
+@Composable
+private fun CreateRecipeScreenConfirmingDiscardPreview() {
+    val editor = RecipeEditorUiState.startingWith(RecipeForm.empty()).withFormChanged { it.copy(name = "生姜焼き") }
+    val confirming = checkNotNull((editor.closeRequested() as? RecipeEditorOutcome.Continue)?.editor) { "変更があるときは、閉じる前に確認するはず" }
+    ScreenPreview {
+        CreateRecipeScreen(CreateRecipeUiState.Editing(confirming), PreviewRecipeEditorActions)
+    }
+}
+
+@Preview
+@Composable
+private fun EditRecipeScreenLoadFailedPreview() {
+    ScreenPreview {
+        EditRecipeScreen(EditRecipeUiState.LoadFailed, PreviewRecipeEditorActions, onRetry = {})
+    }
+}
+
+@Preview
+@Composable
+private fun EditRecipeScreenNoLongerExistsPreview() {
+    ScreenPreview {
+        EditRecipeScreen(EditRecipeUiState.NoLongerExists, PreviewRecipeEditorActions, onRetry = {})
+    }
+}
+
+@Preview
+@Composable
+private fun SaveFailedMessagePreview() {
+    ScreenPreview {
+        SaveFailedMessage()
+    }
+}
+
+@Preview
+@Composable
+private fun IngredientRowFilledPreview() {
+    IngredientRowPreview(IngredientForm(name = "玉ねぎ", selectedItemId = null, quantity = TextFieldValue("1/2"), unit = AmountUnit.PIECE))
+}
+
+@Preview
+@Composable
+private fun IngredientRowNameRequiredPreview() {
+    IngredientRowPreview(IngredientForm.empty().copy(quantity = TextFieldValue("200"), unit = AmountUnit.GRAM), isNameRequired = true)
+}
+
+@Preview
+@Composable
+private fun IngredientRowQuantityFocusedPreview() {
+    IngredientRowPreview(IngredientForm.empty().copy(name = "玉ねぎ", quantity = TextFieldValue("1")), isQuantityFocused = true)
+}
+
+@Preview
+@Composable
+private fun IngredientRowNotEditablePreview() {
+    IngredientRowPreview(IngredientForm(name = "玉ねぎ", selectedItemId = null, quantity = TextFieldValue("1/2"), unit = AmountUnit.PIECE), isEditable = false)
+}
+
+@Preview
+@Composable
+private fun IngredientNameFieldFoundItemsPreview() {
+    val items = listOf("豚こま肉", "豚バラ肉", "豚ひき肉").mapIndexedNotNull { index, name ->
+        NotBlankString.of(name)?.let { Item(ItemId("item-$index"), it) }
+    }
+    ScreenPreview {
+        IngredientNameField(
+            name = "豚",
+            foundItems = items.toImmutableList(),
+            isNameRequired = false,
+            isEditable = true,
+            onNameChange = {},
+            onItemSelect = {},
+            onFocusChange = {},
+        )
+    }
+}
+
+@Composable
+private fun IngredientRowPreview(
+    ingredient: IngredientForm,
+    isNameRequired: Boolean = false,
+    isQuantityFocused: Boolean = false,
+    isEditable: Boolean = true,
+) {
+    ScreenPreview {
+        IngredientRow(
+            key = 0,
+            ingredient = ingredient,
+            isNameRequired = isNameRequired,
+            foundItems = persistentListOf(),
+            isQuantityFocused = isQuantityFocused,
+            isEditable = isEditable,
+            onNameFocusChange = {},
+            onQuantityFocusChange = {},
+            actions = PreviewRecipeEditorActions,
+        )
+    }
+}
+
+private object PreviewRecipeEditorActions : RecipeEditorActions {
+    override fun changeName(name: String) = Unit
+    override fun changeDraft(isDraft: Boolean) = Unit
+    override fun changeMemo(memo: String) = Unit
+    override fun changeIngredientName(key: Long, name: String) = Unit
+    override fun selectItem(key: Long, item: Item) = Unit
+    override fun changeQuantity(key: Long, quantity: TextFieldValue) = Unit
+    override fun insertFractionSlash(key: Long) = Unit
+    override fun changeUnit(key: Long, unit: AmountUnit?) = Unit
+    override fun addIngredient() = Unit
+    override fun removeIngredient(key: Long) = Unit
+    override fun reflectLeftover() = Unit
+    override fun discardLeftover() = Unit
+    override fun save() = Unit
+    override fun requestClose() = Unit
+    override fun discard() = Unit
+    override fun keepEditing() = Unit
+}

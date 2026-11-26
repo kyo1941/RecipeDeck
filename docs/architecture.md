@@ -291,6 +291,8 @@ erDiagram
   - Recipe の ID のように画面を開くときに決まる値は、ViewModel が受け取って UseCase に渡す。`:shared:app` で UseCase に束ねると、ViewModel のテストでは渡す値を確かめられないため
 - 画面が ViewModel を受け取る口は、`:shared:ui` の `ScreenViewModels` に置き、`AppGraph` が継ぐ。`:shared:ui` からグラフは見えないためである（「モジュール構成」）。画面は `viewModel { viewModels.… }` で受けるので、ViewModel を作るのはストアに無いときだけになる。Android の画面の回転でも作り直されない
   - 引数が要る ViewModel（Recipe の ID を受け取る Recipe の画面など）は、`:shared:ui` に置いた factory の interface で受け、`:shared:app` で作る
+- 画面は、ViewModel を受け取って状態を集める `〜ScreenHolder` と、状態と操作だけを受け取る `〜Screen` に分ける。`〜Screen` に Preview を付けるためである。ViewModel の状態を見て遷移を呼ぶ処理（`Closed` を見て閉じるなど）は `〜ScreenHolder` に置く。作成・編集の画面は、操作を `RecipeEditorActions` で受け取り、Preview では何もしない実装を渡す
+  - Preview は、`〜Screen` の状態ごとと、見た目の状態を持つ部品に付け、同じファイルに private で置く。移り変わりの規則を data class に持つ状態（作成・編集の画面）は、その関数で作る。規則を外れた状態を Preview に描かないためである。アプリと同じ見た目にするため、`MaterialTheme` と `Surface` で包む（`ScreenPreview`）
 - 残った編集（[spec.md](spec.md#画面の構成)）は、型付きの DataStore に、Recipe の ID ごとに入れる。新しく作っている途中の分は、別のキーにする。入力が変わるたびにデバウンスして書き、保存したとき、入力を捨てて閉じたときに消す。デバウンスの間に終わらされた分は失われてよい
   - `SavedStateHandle` を使わないのは、iOS ではアプリが終わると中身が消えるためである。Compose Multiplatform 1.12.2 の iOS は、保存した状態を `ComposeContainer` の中の変数に置くだけで、ファイルにも UIKit の state restoration にもつながらず、外から保存した状態を渡す口もない（`ComposeContainer.ios.kt`）
   - 購入の記録で DataStore を採らなかった理由（Session と同じトランザクションに入れられない。「データ層の方針」）は、残った編集には当たらない。Recipe の保存と同じトランザクションに入れる必要がないためである

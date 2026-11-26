@@ -22,11 +22,11 @@ import com.example.recipedeck.ui.navigation.Route
 import com.example.recipedeck.ui.navigation.TopLevelDestination
 import com.example.recipedeck.ui.navigation.rememberRecipeDeckNavigation
 import com.example.recipedeck.ui.navigation.withoutAnimationOnDestinationChange
-import com.example.recipedeck.ui.recipe.CreateRecipeScreen
-import com.example.recipedeck.ui.recipe.EditRecipeScreen
-import com.example.recipedeck.ui.recipe.RecipeListScreen
-import com.example.recipedeck.ui.recipe.RecipeScreen
-import com.example.recipedeck.ui.shopping.ShoppingListScreen
+import com.example.recipedeck.ui.recipe.CreateRecipeScreenHolder
+import com.example.recipedeck.ui.recipe.EditRecipeScreenHolder
+import com.example.recipedeck.ui.recipe.RecipeListScreenHolder
+import com.example.recipedeck.ui.recipe.RecipeScreenHolder
+import com.example.recipedeck.ui.shopping.ShoppingListScreenHolder
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -48,29 +48,29 @@ fun RecipeDeckApp(viewModels: ScreenViewModels) {
 
 private fun screenOf(route: Route, viewModels: ScreenViewModels, navigation: RecipeDeckNavigation): NavEntry<Route> = when (route) {
     Route.RecipeList -> NavEntry(route) {
-        RecipeListScreen(
+        RecipeListScreenHolder(
             viewModel = viewModel { viewModels.recipeListViewModel },
             onRecipeClick = { recipeId -> navigation.open(Route.Recipe(recipeId.value)) },
             onCreateRecipeClick = { navigation.open(Route.CreateRecipe()) },
             onResumeLeftoverClick = { navigation.open(Route.CreateRecipe(resumesLeftover = true)) },
         )
     }
-    Route.ShoppingList -> NavEntry(route) { ShoppingListScreen(viewModel { viewModels.shoppingListViewModel }) }
+    Route.ShoppingList -> NavEntry(route) { ShoppingListScreenHolder(viewModel { viewModels.shoppingListViewModel }) }
     is Route.Recipe -> NavEntry(route) {
-        RecipeScreen(
+        RecipeScreenHolder(
             viewModel = viewModel { viewModels.recipeViewModelFactory.create(RecipeId(route.recipeId)) },
             onBack = navigation::goBack,
             onEditClick = { navigation.open(Route.EditRecipe(route.recipeId)) },
         )
     }
     is Route.CreateRecipe -> NavEntry(route, metadata = DialogSceneStrategy.dialog(FullScreenModalProperties)) {
-        CreateRecipeScreen(
+        CreateRecipeScreenHolder(
             viewModel = viewModel { viewModels.createRecipeViewModelFactory.create(route.resumesLeftover) },
             onClosed = navigation::goBack,
         )
     }
     is Route.EditRecipe -> NavEntry(route, metadata = DialogSceneStrategy.dialog(FullScreenModalProperties)) {
-        EditRecipeScreen(
+        EditRecipeScreenHolder(
             viewModel = viewModel { viewModels.editRecipeViewModelFactory.create(RecipeId(route.recipeId)) },
             onClosed = navigation::goBack,
         )
