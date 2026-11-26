@@ -85,7 +85,7 @@ class EditRecipeViewModelTest {
     private val leftoverEdits = FakeLeftoverRecipeEditStore()
 
     private val EditRecipeViewModel.editor: RecipeEditorUiState
-        get() = assertIs<RecipeEditorStep.Editing>(uiState.value).editor
+        get() = assertIs<EditRecipeUiState.Editing>(uiState.value).editor
 
     private val EditRecipeViewModel.firstKey: Long
         get() = editor.form.ingredients.rows.first().key
@@ -114,7 +114,7 @@ class EditRecipeViewModelTest {
         viewModel.save()
 
         assertEquals(listOf(ItemInput.Selected(pork.id), ItemInput.Typed("玉ねぎ")), editedIngredients?.map { it.item })
-        assertIs<RecipeEditorStep.Finished>(viewModel.uiState.value)
+        assertEquals(EditRecipeUiState.Closed, viewModel.uiState.value)
     }
 
     @Test
@@ -160,21 +160,23 @@ class EditRecipeViewModelTest {
     }
 
     @Test
-    fun 読み込み中の閉じる操作では状態を変えない() = runTest {
-        val viewModel = viewModel(shown = { MutableSharedFlow() })
+    fun 読み込み中に閉じたら読み込みが終わっても閉じたままになる() = runTest {
+        val shown = MutableSharedFlow<ShowRecipeResult>()
+        val viewModel = viewModel(shown = { shown })
 
         viewModel.requestClose()
+        shown.emit(gingerPork)
 
-        assertEquals(EditRecipeUiState.Loading, viewModel.uiState.value)
+        assertEquals(EditRecipeUiState.Closed, viewModel.uiState.value)
     }
 
     @Test
-    fun 見つからない画面の閉じる操作では状態を変えない() = runTest {
+    fun 見つからない画面で閉じると閉じる() = runTest {
         val viewModel = viewModel(shown = { flowOf(ShowRecipeResult.RecipeNoLongerExists) })
 
         viewModel.requestClose()
 
-        assertEquals(EditRecipeUiState.NoLongerExists, viewModel.uiState.value)
+        assertEquals(EditRecipeUiState.Closed, viewModel.uiState.value)
     }
 
     @Test
@@ -183,7 +185,7 @@ class EditRecipeViewModelTest {
 
         viewModel.requestClose()
 
-        assertIs<RecipeEditorStep.Finished>(viewModel.uiState.value)
+        assertEquals(EditRecipeUiState.Closed, viewModel.uiState.value)
     }
 
     @Test
@@ -194,7 +196,7 @@ class EditRecipeViewModelTest {
 
         viewModel.requestClose()
 
-        assertIs<RecipeEditorStep.Finished>(viewModel.uiState.value)
+        assertEquals(EditRecipeUiState.Closed, viewModel.uiState.value)
     }
 
     @Test
@@ -204,7 +206,7 @@ class EditRecipeViewModelTest {
 
         viewModel.requestClose()
 
-        assertIs<RecipeEditorStep.Finished>(viewModel.uiState.value)
+        assertEquals(EditRecipeUiState.Closed, viewModel.uiState.value)
     }
 
     @Test
@@ -214,7 +216,7 @@ class EditRecipeViewModelTest {
 
         viewModel.requestClose()
 
-        assertTrue(viewModel.editor.showsDiscardConfirmation)
+        assertTrue(viewModel.editor.isConfirmingDiscard)
     }
 
     @Test

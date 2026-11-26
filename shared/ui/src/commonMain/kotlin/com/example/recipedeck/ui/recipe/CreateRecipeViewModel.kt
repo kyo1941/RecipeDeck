@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class CreateRecipeViewModel(
@@ -31,13 +30,12 @@ class CreateRecipeViewModel(
     private val _uiState = MutableStateFlow<CreateRecipeUiState>(CreateRecipeUiState.Loading)
     val uiState: StateFlow<CreateRecipeUiState> = _uiState.asStateFlow()
 
-    private val editors = _uiState.mapNotNull { (it as? RecipeEditorStep.Editing)?.editor }
+    private val editors = _uiState.mapNotNull { (it as? CreateRecipeUiState.Editing)?.editor }
 
     init {
-        viewModelScope.launch { start() }
+        viewModelScope.launch { load() }
         viewModelScope.launch { searchItemsWhenQueried() }
-        viewModelScope.launch { createWhenSaveRequested() }
-        leftoverEditKeeper.keepSaving(viewModelScope, _uiState.mapNotNull { it.leftoverWrite() })
+        leftoverEditKeeper.keepSaving(viewModelScope, editors.map { it.leftoverToKeep })
     }
 
     override fun changeName(name: String) = updateForm { it.copy(name = name) }
@@ -66,15 +64,31 @@ class CreateRecipeViewModel(
 
     override fun discardLeftover() = updateEditor { it.copy(offeredLeftover = null) }
 
-    override fun save() = updateEditor { it.saveRequested() }
+    override fun save() {
+        val saving = currentEditor()?.saveRequested() ?: return
+        _uiState.value = CreateRecipeUiState.Editing(saving)
+        viewModelScope.launch {
+            val form = saving.form
+            when (val result = createRecipe(form.name, form.status, form.memo, form.ingredients.toInputs())) {
+                is CreateRecipeResult.Created -> applyOutcome { it.saved() }
+                CreateRecipeResult.NameRequired, is CreateRecipeResult.IngredientDisplayNameRequired -> updateEditor { it.saveRejected() }
+                is CreateRecipeResult.Unexpected -> {
+                    logger.e(result.cause) { "Recipe を作成できなかった" }
+                    updateEditor { it.saveFailed() }
+                }
+            }
+        }
+    }
 
-    override fun requestClose() = updateStep { it.closeRequested() }
+    override fun requestClose() {
+        if (_uiState.value is CreateRecipeUiState.Editing) applyOutcome { it.closeRequested() } else _uiState.value = CreateRecipeUiState.Closed
+    }
 
-    override fun discard() = updateStep { it.discarded() }
+    override fun discard() = applyOutcome { it.discarded() }
 
-    override fun keepEditing() = updateEditor { it.copy(isCloseRequested = false) }
+    override fun keepEditing() = updateEditor { it.copy(isConfirmingDiscard = false) }
 
-    private suspend fun start() {
+    private suspend fun load() {
         val leftover = leftoverEditKeeper.read()
         val editor = RecipeEditorUiState.startingWith(RecipeForm.empty()).let {
             when {
@@ -83,7 +97,7 @@ class CreateRecipeViewModel(
                 else -> it.copy(offeredLeftover = leftover)
             }
         }
-        _uiState.update { if (it == CreateRecipeUiState.Loading) RecipeEditorStep.Editing(editor) else it }
+        if (_uiState.value == CreateRecipeUiState.Loading) _uiState.value = CreateRecipeUiState.Editing(editor)
     }
 
     private suspend fun searchItemsWhenQueried() {
@@ -96,32 +110,24 @@ class CreateRecipeViewModel(
         }
     }
 
-    private suspend fun createWhenSaveRequested() {
-        editors.map { it.formBeingSaved }.distinctUntilChanged().filterNotNull().collect { form ->
-            val result = createRecipe(form.name, form.status, form.memo, form.ingredients.toInputs())
-            if (result is CreateRecipeResult.Unexpected) logger.e(result.cause) { "Recipe を作成できなかった" }
-            updateStep { editor ->
-                when (result) {
-                    is CreateRecipeResult.Created -> editor.saved()
-                    CreateRecipeResult.NameRequired, is CreateRecipeResult.IngredientDisplayNameRequired -> editor.saveRejected()
-                    is CreateRecipeResult.Unexpected -> editor.saveFailed()
-                }
-            }
-        }
-    }
+    private fun currentEditor(): RecipeEditorUiState? = (_uiState.value as? CreateRecipeUiState.Editing)?.editor
 
     private fun updateForm(transform: (RecipeForm) -> RecipeForm) = updateEditor { it.withFormChanged(transform) }
 
-    private fun updateEditor(transform: (RecipeEditorUiState) -> RecipeEditorUiState) =
-        updateStep { RecipeEditorStep.Editing(transform(it)) }
-
-    private fun updateStep(transform: (RecipeEditorUiState) -> RecipeEditorStep) {
-        _uiState.update { state -> if (state is RecipeEditorStep.Editing) transform(state.editor) else state }
+    private fun updateEditor(transform: (RecipeEditorUiState) -> RecipeEditorUiState) {
+        val editor = currentEditor() ?: return
+        _uiState.value = CreateRecipeUiState.Editing(transform(editor))
     }
 
-    private fun CreateRecipeUiState.leftoverWrite(): LeftoverWrite? = when (this) {
-        CreateRecipeUiState.Loading -> null
-        is RecipeEditorStep -> leftoverWrite()
+    private fun applyOutcome(transform: (RecipeEditorUiState) -> RecipeEditorOutcome) {
+        val editor = currentEditor() ?: return
+        when (val outcome = transform(editor)) {
+            is RecipeEditorOutcome.Continue -> _uiState.value = CreateRecipeUiState.Editing(outcome.editor)
+            is RecipeEditorOutcome.Finish -> {
+                _uiState.value = CreateRecipeUiState.Closed
+                leftoverEditKeeper.finish(viewModelScope, outcome.leftoverToKeep)
+            }
+        }
     }
 
     private companion object {
@@ -135,4 +141,6 @@ fun interface CreateRecipeViewModelFactory {
 
 sealed interface CreateRecipeUiState {
     data object Loading : CreateRecipeUiState
+    data class Editing(val editor: RecipeEditorUiState) : CreateRecipeUiState
+    data object Closed : CreateRecipeUiState
 }

@@ -80,23 +80,20 @@ fun CreateRecipeScreen(viewModel: CreateRecipeViewModel, onClosed: () -> Unit, m
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState) {
-        if (uiState is RecipeEditorStep.Finished) onClosed()
+        if (uiState == CreateRecipeUiState.Closed) onClosed()
     }
-    val editor = (uiState as? RecipeEditorStep.Editing)?.editor
-    // エディタがない間は、閉じても失われる入力も残った編集もないので、ViewModel を通さずに閉じる。
-    val onCloseRequest = if (editor != null) viewModel::requestClose else onClosed
-    ModalBackHandler(onCloseRequest = onCloseRequest)
+    val editor = (uiState as? CreateRecipeUiState.Editing)?.editor
+    ModalBackHandler(onCloseRequest = viewModel::requestClose)
 
     RecipeEditorFrame(
         title = stringResource(Res.string.recipe_editor_title_create),
         editor = editor,
         actions = viewModel,
-        onCloseRequest = onCloseRequest,
         modifier = modifier,
     ) { contentModifier ->
         when (val state = uiState) {
-            CreateRecipeUiState.Loading, is RecipeEditorStep.Finished -> CenteredContent(contentModifier) { CircularProgressIndicator() }
-            is RecipeEditorStep.Editing -> RecipeEditorForm(state.editor, viewModel, contentModifier)
+            CreateRecipeUiState.Loading, CreateRecipeUiState.Closed -> CenteredContent(contentModifier) { CircularProgressIndicator() }
+            is CreateRecipeUiState.Editing -> RecipeEditorForm(state.editor, viewModel, contentModifier)
         }
     }
 }
@@ -106,25 +103,22 @@ fun EditRecipeScreen(viewModel: EditRecipeViewModel, onClosed: () -> Unit, modif
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState) {
-        if (uiState is RecipeEditorStep.Finished) onClosed()
+        if (uiState == EditRecipeUiState.Closed) onClosed()
     }
-    val editor = (uiState as? RecipeEditorStep.Editing)?.editor
-    // エディタがない間は、閉じても失われる入力も残った編集もないので、ViewModel を通さずに閉じる。
-    val onCloseRequest = if (editor != null) viewModel::requestClose else onClosed
-    ModalBackHandler(onCloseRequest = onCloseRequest)
+    val editor = (uiState as? EditRecipeUiState.Editing)?.editor
+    ModalBackHandler(onCloseRequest = viewModel::requestClose)
 
     RecipeEditorFrame(
         title = stringResource(Res.string.recipe_editor_title_edit),
         editor = editor,
         actions = viewModel,
-        onCloseRequest = onCloseRequest,
         modifier = modifier,
     ) { contentModifier ->
         when (val state = uiState) {
-            EditRecipeUiState.Loading, is RecipeEditorStep.Finished -> CenteredContent(contentModifier) { CircularProgressIndicator() }
+            EditRecipeUiState.Loading, EditRecipeUiState.Closed -> CenteredContent(contentModifier) { CircularProgressIndicator() }
             EditRecipeUiState.LoadFailed -> LoadFailedContent(stringResource(Res.string.recipe_load_failed), viewModel::retry, contentModifier)
             EditRecipeUiState.NoLongerExists -> CenteredContent(contentModifier) { Text(stringResource(Res.string.recipe_no_longer_exists)) }
-            is RecipeEditorStep.Editing -> RecipeEditorForm(state.editor, viewModel, contentModifier)
+            is EditRecipeUiState.Editing -> RecipeEditorForm(state.editor, viewModel, contentModifier)
         }
     }
 }
@@ -134,7 +128,6 @@ private fun RecipeEditorFrame(
     title: String,
     editor: RecipeEditorUiState?,
     actions: RecipeEditorActions,
-    onCloseRequest: () -> Unit,
     modifier: Modifier,
     content: @Composable (Modifier) -> Unit,
 ) {
@@ -143,7 +136,7 @@ private fun RecipeEditorFrame(
         topBar = {
             TopAppBar(
                 title = { Text(title) },
-                navigationIcon = { ModalCloseButton(onCloseRequest = onCloseRequest, enabled = editor?.saveStatus != SaveStatus.Saving) },
+                navigationIcon = { ModalCloseButton(onCloseRequest = actions::requestClose, enabled = editor?.saveStatus != SaveStatus.Saving) },
                 actions = {
                     if (editor != null) {
                         TextButton(onClick = actions::save, enabled = editor.saveStatus != SaveStatus.Saving) {
@@ -155,7 +148,7 @@ private fun RecipeEditorFrame(
         },
     ) { innerPadding -> content(Modifier.padding(innerPadding)) }
 
-    if (editor?.showsDiscardConfirmation == true) {
+    if (editor?.isConfirmingDiscard == true) {
         AlertDialog(
             onDismissRequest = actions::keepEditing,
             title = { Text(stringResource(Res.string.recipe_editor_discard_title)) },

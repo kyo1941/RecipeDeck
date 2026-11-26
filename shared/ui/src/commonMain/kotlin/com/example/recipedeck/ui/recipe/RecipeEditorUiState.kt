@@ -28,25 +28,20 @@ interface RecipeEditorActions {
     fun keepEditing()
 }
 
-sealed interface RecipeEditorStep : CreateRecipeUiState, EditRecipeUiState {
-    data class Editing(val editor: RecipeEditorUiState) : RecipeEditorStep
+sealed interface RecipeEditorOutcome {
+    data class Continue(val editor: RecipeEditorUiState) : RecipeEditorOutcome
 
-    data class Finished(val leftoverToKeep: RecipeForm?) : RecipeEditorStep
-
-    fun leftoverWrite(): LeftoverWrite = when (this) {
-        is Editing -> LeftoverWrite(editor.leftoverToKeep, isImmediate = false)
-        is Finished -> LeftoverWrite(leftoverToKeep, isImmediate = true)
-    }
+    data class Finish(val leftoverToKeep: RecipeForm?) : RecipeEditorOutcome
 }
 
 data class RecipeEditorUiState(
     val form: RecipeForm,
-    val initialForm: RecipeForm,
-    val isSaveRequested: Boolean = false,
+    private val initialForm: RecipeForm,
+    private val isSaveRequested: Boolean = false,
     val saveStatus: SaveStatus = SaveStatus.Idle,
-    val isCloseRequested: Boolean = false,
+    val isConfirmingDiscard: Boolean = false,
     val itemQuery: ItemQuery? = null,
-    val foundItems: FoundItems? = null,
+    private val foundItems: FoundItems? = null,
     val offeredLeftover: RecipeForm? = null,
 ) {
     val hasUnsavedChanges: Boolean get() = !form.hasSameContentAs(initialForm)
@@ -56,8 +51,6 @@ data class RecipeEditorUiState(
     val ingredientKeysRequiringName: Set<Long>
         get() = if (isSaveRequested) form.ingredients.rows.filter { it.ingredient.toInput().isInvalid }.map { it.key }.toSet() else emptySet()
 
-    val showsDiscardConfirmation: Boolean get() = isCloseRequested && hasUnsavedChanges
-
     val shownFoundItems: FoundItems?
         get() = foundItems?.takeIf { found ->
             found.query == itemQuery &&
@@ -66,8 +59,6 @@ data class RecipeEditorUiState(
         }
 
     val leftoverToKeep: RecipeForm? get() = if (hasUnsavedChanges) form else offeredLeftover
-
-    val formBeingSaved: RecipeForm? get() = form.takeIf { saveStatus == SaveStatus.Saving }
 
     fun withFormChanged(transform: (RecipeForm) -> RecipeForm): RecipeEditorUiState =
         if (saveStatus == SaveStatus.Saving) this else copy(form = transform(form))
@@ -87,27 +78,27 @@ data class RecipeEditorUiState(
         return if (leftover == null || saveStatus == SaveStatus.Saving) this else copy(form = leftover, offeredLeftover = null)
     }
 
-    fun saveRequested(): RecipeEditorUiState =
-        if (saveStatus == SaveStatus.Saving) this else copy(isSaveRequested = true, saveStatus = SaveStatus.Saving)
+    fun saveRequested(): RecipeEditorUiState? =
+        if (saveStatus == SaveStatus.Saving) null else copy(isSaveRequested = true, saveStatus = SaveStatus.Saving)
 
-    fun saveRejected(): RecipeEditorStep = afterSaving { copy(saveStatus = SaveStatus.Idle) }
+    fun saveRejected(): RecipeEditorUiState = afterSaving { copy(saveStatus = SaveStatus.Idle) }
 
-    fun saveFailed(): RecipeEditorStep = afterSaving { copy(saveStatus = SaveStatus.Failed) }
+    fun saveFailed(): RecipeEditorUiState = afterSaving { copy(saveStatus = SaveStatus.Failed) }
 
-    fun closeRequested(): RecipeEditorStep = when {
-        saveStatus == SaveStatus.Saving -> RecipeEditorStep.Editing(this)
-        hasUnsavedChanges -> RecipeEditorStep.Editing(copy(isCloseRequested = true))
-        else -> RecipeEditorStep.Finished(leftoverToKeep = offeredLeftover)
+    fun closeRequested(): RecipeEditorOutcome = when {
+        saveStatus == SaveStatus.Saving -> RecipeEditorOutcome.Continue(this)
+        hasUnsavedChanges -> RecipeEditorOutcome.Continue(copy(isConfirmingDiscard = true))
+        else -> RecipeEditorOutcome.Finish(leftoverToKeep = offeredLeftover)
     }
 
-    fun discarded(): RecipeEditorStep = RecipeEditorStep.Finished(leftoverToKeep = null)
+    fun discarded(): RecipeEditorOutcome = RecipeEditorOutcome.Finish(leftoverToKeep = null)
 
-    fun saved(): RecipeEditorStep =
-        if (saveStatus == SaveStatus.Saving) RecipeEditorStep.Finished(leftoverToKeep = null) else RecipeEditorStep.Editing(this)
+    fun saved(): RecipeEditorOutcome =
+        if (saveStatus == SaveStatus.Saving) RecipeEditorOutcome.Finish(leftoverToKeep = null) else RecipeEditorOutcome.Continue(this)
 
     // 保存の結果は、保存を始めた後に遅れて届く。その間に状態が変わっていたら（保存中でなければ）当てない。
-    private fun afterSaving(transform: RecipeEditorUiState.() -> RecipeEditorUiState): RecipeEditorStep =
-        RecipeEditorStep.Editing(if (saveStatus == SaveStatus.Saving) transform() else this)
+    private fun afterSaving(transform: RecipeEditorUiState.() -> RecipeEditorUiState): RecipeEditorUiState =
+        if (saveStatus == SaveStatus.Saving) transform() else this
 
     companion object {
         fun startingWith(form: RecipeForm) = RecipeEditorUiState(form = form, initialForm = form)
