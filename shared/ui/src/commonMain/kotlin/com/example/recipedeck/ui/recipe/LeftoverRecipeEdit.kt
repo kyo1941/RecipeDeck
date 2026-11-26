@@ -77,6 +77,9 @@ class LeftoverRecipeEditKeeper(
 
     private suspend fun write(leftover: RecipeForm?) {
         if (stored?.let { leftover.hasSameContentAs(it.leftover) } == true) return
+        // 書いている途中で取り消されても、保存先は書き終わっていることがある（DataStore は受け付けた更新を最後まで行う）。
+        // 終わったときの書き込みを「同じ値」と見て飛ばさないよう、書き終えるまでは分からないものとして扱う。
+        stored = null
         if (leftover == null) store.delete(key) else store.save(key, leftover.toLeftoverEdit())
         stored = Stored(leftover)
     }

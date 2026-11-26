@@ -630,4 +630,19 @@ class CreateRecipeViewModelTest {
 
         assertEquals(writesBeforeOpening, leftoverEdits.writes)
     }
+
+    @Test
+    fun 書き込みの途中で保存できても残った編集を消す() = runTest {
+        val saving = CompletableDeferred<CreateRecipeResult>()
+        val viewModel = viewModel { saving.await() }
+        viewModel.changeName("生姜焼き")
+        viewModel.save()
+        leftoverEdits.afterWrite = CompletableDeferred()
+        advanceTimeBy(1_001)
+        assertEquals("生姜焼き", storedLeftover?.name)
+
+        saving.complete(CreateRecipeResult.Created(RecipeId("new"), persistentListOf()))
+
+        assertNull(storedLeftover)
+    }
 }
