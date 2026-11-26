@@ -9,7 +9,7 @@ import com.example.recipedeck.domain.recipe.RecipeStatus
 import com.example.recipedeck.ui.amount.isAcceptableQuantityText
 import com.example.recipedeck.ui.amount.notationOf
 import com.example.recipedeck.ui.amount.quantityOrNull
-import com.example.recipedeck.ui.amount.text
+import com.example.recipedeck.ui.amount.editableText
 import com.example.recipedeck.usecase.ingredient.IngredientInput
 import com.example.recipedeck.usecase.ingredient.ItemInput
 import com.example.recipedeck.usecase.recipe.ShowRecipeResult
@@ -144,7 +144,7 @@ data class IngredientForm(
         fun of(shown: ShowRecipeResult.Shown.Ingredient) = IngredientForm(
             name = shown.item.displayName.value,
             selectedItemId = shown.item.id,
-            quantity = TextFieldValue(shown.amount?.let { it.quantity.text(it.notation) }.orEmpty()),
+            quantity = TextFieldValue(shown.amount?.let { it.quantity.editableText(it.notation) }.orEmpty()),
             unit = shown.amount?.unit,
         )
 

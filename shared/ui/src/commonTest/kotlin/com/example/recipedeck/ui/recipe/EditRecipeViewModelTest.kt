@@ -251,4 +251,20 @@ class EditRecipeViewModelTest {
 
         assertEquals(emptyMap(), leftoverEdits.edits.value)
     }
+
+    @Test
+    fun 分数で入力した整数の材料はメモだけ直して保存しても分数のまま() = runTest {
+        val twoWhole = Amount(quantity(2), QuantityNotation.FRACTION, AmountUnit.PIECE)
+        val shown = gingerPork.copy(
+            recipe = gingerPork.recipe.copy(ingredients = persistentListOf(RecipeIngredient(pork.id, twoWhole))),
+            ingredients = persistentListOf(ShowRecipeResult.Shown.Ingredient(pork, twoWhole)),
+        )
+        val viewModel = viewModel(shown = { flowOf(shown) })
+        assertEquals("2/1", viewModel.editor.form.ingredients.rows.single().ingredient.quantity.text)
+
+        viewModel.changeMemo("弱火で焼く")
+        viewModel.save()
+
+        assertEquals(QuantityNotation.FRACTION, editedIngredients?.single()?.notation)
+    }
 }
