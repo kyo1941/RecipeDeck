@@ -402,7 +402,7 @@ private val FOUND_ITEMS_BAND_HEIGHT = 48.dp
 @Composable
 private fun CreateRecipeScreenEmptyPreview() {
     ScreenPreview {
-        CreateRecipeScreen(CreateRecipeUiState.Editing(previewEditor(RecipeForm.empty())), PreviewRecipeEditorActions)
+        CreateRecipeScreen(CreateRecipeUiState.Editing(RecipeEditorUiState.startingWith(RecipeForm.empty())), PreviewRecipeEditorActions)
     }
 }
 
@@ -412,7 +412,7 @@ private fun CreateRecipeScreenRequiredPreview() {
     val form = RecipeForm.empty().copy(
         ingredients = IngredientListForm.of(listOf(IngredientForm.empty().copy(quantity = TextFieldValue("1/2")))),
     )
-    val rejected = checkNotNull(previewEditor(form).saveRequested()?.saveRejected()) { "保存中でなければ、保存を始められるはず" }
+    val rejected = checkNotNull(RecipeEditorUiState.startingWith(form).saveRequested()?.saveRejected()) { "保存中でなければ、保存を始められるはず" }
     ScreenPreview {
         CreateRecipeScreen(CreateRecipeUiState.Editing(rejected), PreviewRecipeEditorActions)
     }
@@ -421,7 +421,7 @@ private fun CreateRecipeScreenRequiredPreview() {
 @Preview
 @Composable
 private fun CreateRecipeScreenItemCandidatesPreview() {
-    val typing = previewEditor(RecipeForm.empty().copy(name = "生姜焼き")).withIngredientNameChanged(key = 0, name = "豚")
+    val typing = RecipeEditorUiState.startingWith(RecipeForm.empty().copy(name = "生姜焼き")).withIngredientNameChanged(key = 0, name = "豚")
     val query = checkNotNull(typing.itemQuery) { "材料の名前を打ったら、候補を探すはず" }
     val items = listOf("豚こま肉", "豚バラ肉", "豚ひき肉").mapIndexedNotNull { index, name ->
         NotBlankString.of(name)?.let { Item(ItemId("item-$index"), it) }
@@ -436,7 +436,7 @@ private fun CreateRecipeScreenItemCandidatesPreview() {
 @Composable
 private fun CreateRecipeScreenLeftoverPreview() {
     ScreenPreview {
-        val editor = previewEditor(RecipeForm.empty()).copy(offeredLeftover = RecipeForm.empty().copy(name = "生姜焼き"))
+        val editor = RecipeEditorUiState.startingWith(RecipeForm.empty()).copy(offeredLeftover = RecipeForm.empty().copy(name = "生姜焼き"))
         CreateRecipeScreen(CreateRecipeUiState.Editing(editor), PreviewRecipeEditorActions)
     }
 }
@@ -444,7 +444,7 @@ private fun CreateRecipeScreenLeftoverPreview() {
 @Preview
 @Composable
 private fun CreateRecipeScreenSaveFailedPreview() {
-    val failed = checkNotNull(previewEditor(RecipeForm.empty().copy(name = "生姜焼き")).saveRequested()?.saveFailed()) { "保存中でなければ、保存を始められるはず" }
+    val failed = checkNotNull(RecipeEditorUiState.startingWith(RecipeForm.empty().copy(name = "生姜焼き")).saveRequested()?.saveFailed()) { "保存中でなければ、保存を始められるはず" }
     ScreenPreview {
         CreateRecipeScreen(CreateRecipeUiState.Editing(failed), PreviewRecipeEditorActions)
     }
@@ -453,7 +453,7 @@ private fun CreateRecipeScreenSaveFailedPreview() {
 @Preview
 @Composable
 private fun CreateRecipeScreenConfirmingDiscardPreview() {
-    val editor = previewEditor(RecipeForm.empty()).withFormChanged { it.copy(name = "生姜焼き") }
+    val editor = RecipeEditorUiState.startingWith(RecipeForm.empty()).withFormChanged { it.copy(name = "生姜焼き") }
     val confirming = checkNotNull((editor.closeRequested() as? RecipeEditorOutcome.Continue)?.editor) { "変更があるときは、閉じる前に確認するはず" }
     ScreenPreview {
         CreateRecipeScreen(CreateRecipeUiState.Editing(confirming), PreviewRecipeEditorActions)
@@ -548,8 +548,6 @@ private fun IngredientRowPreview(
         )
     }
 }
-
-private fun previewEditor(form: RecipeForm) = RecipeEditorUiState(form = form, initialForm = form)
 
 private object PreviewRecipeEditorActions : RecipeEditorActions {
     override fun changeName(name: String) = Unit
