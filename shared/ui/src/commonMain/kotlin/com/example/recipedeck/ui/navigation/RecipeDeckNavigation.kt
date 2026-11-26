@@ -36,7 +36,7 @@ class RecipeDeckNavigation(
 
     fun open(route: Route) {
         val backStack = backStacks.getValue(currentDestination)
-        // 素早く2回押すと同じ経路が積まれ、経路ごとに持つ画面の状態と ViewModel がぶつかるため。
+        // 同じ Route を続けて積むと、Navigation 3 のキー衝突で画面状態や ViewModel がぶつかるため無視する。
         if (backStack.lastOrNull() != route) backStack.add(route)
     }
 

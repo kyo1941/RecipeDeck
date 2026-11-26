@@ -63,9 +63,6 @@ data class RecipeForm(
     }
 }
 
-/**
- * 行は途中からも消せるので、並びの位置では行を指し続けられない。行を作るたびに番号を振り、画面のリストの key と、保存の結果で示す行の特定に使う。
- */
 @ConsistentCopyVisibility
 data class IngredientListForm private constructor(
     val rows: ImmutableList<Row>,

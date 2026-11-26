@@ -6,9 +6,6 @@ import com.example.recipedeck.domain.amount.AmountUnit
 import com.example.recipedeck.domain.item.Item
 import kotlinx.collections.immutable.ImmutableList
 
-/**
- * 作成と編集の画面が、どちらの ViewModel にも同じ操作で呼びかけるための契約。
- */
 interface RecipeEditorActions {
     fun changeName(name: String)
     fun changeDraft(isDraft: Boolean)
@@ -96,7 +93,6 @@ data class RecipeEditorUiState(
     fun saved(): RecipeEditorOutcome =
         if (saveStatus == SaveStatus.Saving) RecipeEditorOutcome.Finish(leftoverToKeep = null) else RecipeEditorOutcome.Continue(this)
 
-    // 保存の結果は、保存を始めた後に遅れて届く。その間に状態が変わっていたら（保存中でなければ）当てない。
     private fun afterSaving(transform: RecipeEditorUiState.() -> RecipeEditorUiState): RecipeEditorUiState =
         if (saveStatus == SaveStatus.Saving) transform() else this
 

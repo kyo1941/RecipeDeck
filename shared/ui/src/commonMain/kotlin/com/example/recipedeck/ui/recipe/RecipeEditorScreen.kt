@@ -162,11 +162,6 @@ private fun RecipeEditorFrame(
 
 @Composable
 private fun RecipeEditorForm(editor: RecipeEditorUiState, actions: RecipeEditorActions, modifier: Modifier) {
-    // NOTE: UI を作り終えるまでのメモ。画面を書き直すときの、状態の置き場所の判断に使う。
-    // データや保存の規則に関わる状態は ViewModel に置く（閉じるときの確認のダイアログはこちら。「変わっていれば確かめる」をテストで守るため）。
-    // フォーカスのように UI の仕組みが持っていて、データに効かない状態は画面に置く。
-    // ViewModel にも持つと、キーボードを閉じたときなどの変化を知らせ漏らし、実際のフォーカスとずれるため。
-    // 「/」のボタンや Item の候補を出す行は後者なので、ここで持つ。
     var focusedQuantityKey by remember { mutableStateOf<Long?>(null) }
     var focusedNameKey by remember { mutableStateOf<Long?>(null) }
     val isEditable = editor.saveStatus != SaveStatus.Saving
@@ -350,7 +345,7 @@ private fun IngredientNameField(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth().onFocusChanged { onFocusChange(it.isFocused) },
         )
-        // 候補を欄の上に重ねると、すぐ下の数量の欄を覆って押せなくなるので、欄の下に差し込む。
+        // ドロップダウンで重ねると直下の数量欄を覆って誤タップするため、欄の下に並べる。
         if (foundItems.isNotEmpty()) {
             Row(
                 modifier = Modifier.fillMaxWidth().height(FOUND_ITEMS_BAND_HEIGHT).horizontalScroll(rememberScrollState()),

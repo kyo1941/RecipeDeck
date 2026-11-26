@@ -9,8 +9,8 @@ internal fun Quantity.text(notation: QuantityNotation): String = when (notation)
 }
 
 /**
- * 入力欄に入れる文字。分数で入力した数量は、分母が 1 でも「2/1」のまま出す。
- * 「2」と出すと、入力欄の文字から入力形式を決め直したときに小数になり、触っていない材料の入力形式が保存で変わるため。
+ * 分数で入力した数量は、分母が 1 でも「2/1」のまま返す。
+ * 「2」にすると入力文字から入力形式を決め直したときに小数になり、触っていない材料の入力形式が保存で変わるため。
  */
 internal fun Quantity.editableText(notation: QuantityNotation): String = when (notation) {
     QuantityNotation.FRACTION -> "$numerator/$denominator"
@@ -42,10 +42,6 @@ internal fun quantityOrNull(text: String): Quantity? {
 
 private fun Quantity.fractionText(): String = if (denominator == 1L) "$numerator" else "$numerator/$denominator"
 
-/**
- * 小数で入力された数量は分母が 10 の累乗の約数になるので、割り切れる桁数を探して小数に戻す。
- * 計算の途中で桁があふれる数量は、小数に戻さず null を返す。
- */
 private fun Quantity.decimalTextOrNull(): String? {
     var scale = 1L
     var digits = 0

@@ -17,5 +17,6 @@ internal actual fun ModalCloseButton(onCloseRequest: () -> Unit, enabled: Boolea
 
 @Composable
 internal actual fun ModalBackHandler(onCloseRequest: () -> Unit) {
+    // iOS では戻る操作でモーダルを閉じないが、ここで消費しないと下の NavDisplay に抜けて閉じてしまう。
     NavigationBackHandler(state = rememberNavigationEventState(NavigationEventInfo.None), onBackCompleted = {})
 }

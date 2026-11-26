@@ -39,7 +39,7 @@ sealed interface LeftoverRecipeEditKey {
 
 /**
  * 読み書きに失敗しても例外は投げず、ログに残す。
- * 読めなければ残った編集はないものとして流し、書き込みは書けたかどうかを返す。
+ * 読めなければ null を流し、書き込みは書けたかどうかを返す。
  */
 interface LeftoverRecipeEditStore {
     fun leftoverEdit(key: LeftoverRecipeEditKey): Flow<LeftoverRecipeEdit?>
@@ -69,8 +69,8 @@ class LeftoverRecipeEditKeeper(
 
     fun finish(scope: CoroutineScope, leftoverToKeep: RecipeForm?) {
         saveJob?.cancel()
-        // 終わるとすぐ ViewModel が片付けられ、scope が取り消される。
-        // 書き損ねると、捨てたはずの入力が次に開いたときに出るので、取り消されても書き終える形にする。
+        // 画面を閉じるとすぐ ViewModel の scope がキャンセルされる。
+        // ディスパッチ前にキャンセルされず、保存・破棄の結果を書き切れるよう UNDISPATCHED と NonCancellable を使う。
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             withContext(NonCancellable) { write(leftoverToKeep) }
         }
@@ -78,8 +78,8 @@ class LeftoverRecipeEditKeeper(
 
     private suspend fun write(leftover: RecipeForm?) {
         if (stored?.let { leftover.hasSameContentAs(it.leftover) } == true) return
-        // 書いている途中で取り消されると、保存先に書けたかどうかが分からない。
-        // 終わったときの書き込みを「同じ値」と見て飛ばさないよう、書き終えるまでは分からないものとして扱う。
+        // 書き込みの途中でキャンセルされると保存先の中身が分からなくなる。
+        // 次の書き込みを同じ値とみなして飛ばさないよう、書き終えるまでは不明として扱う。
         stored = null
         val isWritten = if (leftover == null) store.delete(key) else store.save(key, leftover.toLeftoverEdit())
         if (isWritten) stored = Stored(leftover)
@@ -88,7 +88,7 @@ class LeftoverRecipeEditKeeper(
     private fun RecipeForm?.hasSameContentAs(other: RecipeForm?): Boolean =
         if (this == null || other == null) this == other else hasSameContentAs(other)
 
-    // 保存先にあると分かっている残った編集。まだ読んでも書いてもいなければ、分からないので null。
+    // 保存先の中身が不明な状態（null）と、空だと分かっている状態（Stored(null)）を区別するためのラッパー。
     private data class Stored(val leftover: RecipeForm?)
 
     private companion object {
