@@ -35,7 +35,10 @@ class RecipeDeckNavigation(
     }
 
     fun open(route: Route) {
-        backStacks.getValue(currentDestination).add(route)
+        val backStack = backStacks.getValue(currentDestination)
+        // 画面が切り替わる前に同じ行やボタンを2回押すと、同じ経路が2つ積まれる。
+        // 画面の状態と ViewModel は経路ごとに持つので、同じ経路が2つあるとぶつかる。
+        if (backStack.lastOrNull() != route) backStack.add(route)
     }
 
     fun goBack() {
