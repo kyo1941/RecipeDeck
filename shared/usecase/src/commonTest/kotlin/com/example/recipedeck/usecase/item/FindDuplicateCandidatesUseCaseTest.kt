@@ -17,7 +17,7 @@ class FindDuplicateCandidatesUseCaseTest {
         val onion = Item(ItemId("item-onion"), notBlankStringOrFail("たまねぎ"))
         duplicateCandidateFinder.itemCandidates = persistentListOf(onion)
 
-        val result = findDuplicateCandidates(" 玉葱　")
+        val result = findDuplicateCandidates(" 玉葱　", renamingItemId = null)
 
         assertEquals(FindDuplicateCandidatesResult.Found(persistentListOf(onion)), result)
         assertEquals(listOf(notBlankStringOrFail("玉葱")), duplicateCandidateFinder.requestedDisplayNames)
@@ -25,7 +25,7 @@ class FindDuplicateCandidatesUseCaseTest {
 
     @Test
     fun 名前を変えるItemが指定されなければ何も除かずに探す() = runTest {
-        findDuplicateCandidates("玉葱")
+        findDuplicateCandidates("玉葱", renamingItemId = null)
 
         assertEquals(listOf<ItemId?>(null), duplicateCandidateFinder.requestedExcludedItemIds)
     }
@@ -41,7 +41,7 @@ class FindDuplicateCandidatesUseCaseTest {
 
     @Test
     fun 入力が空白だけなら探さずに何も返さない() = runTest {
-        val result = findDuplicateCandidates(" 　\n")
+        val result = findDuplicateCandidates(" 　\n", renamingItemId = null)
 
         assertEquals(FindDuplicateCandidatesResult.Found(persistentListOf()), result)
         assertEquals(emptyList(), duplicateCandidateFinder.requestedDisplayNames)
@@ -52,7 +52,7 @@ class FindDuplicateCandidatesUseCaseTest {
         val cause = IllegalStateException("候補を探せない")
         duplicateCandidateFinder.findFailure = DuplicateCandidateFinderFailure.Unexpected(cause)
 
-        val result = findDuplicateCandidates("玉葱")
+        val result = findDuplicateCandidates("玉葱", renamingItemId = null)
 
         assertEquals(FindDuplicateCandidatesResult.Unexpected(cause), result)
     }

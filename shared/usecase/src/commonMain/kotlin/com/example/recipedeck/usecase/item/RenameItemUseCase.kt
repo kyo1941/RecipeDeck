@@ -7,10 +7,14 @@ import com.example.recipedeck.domain.item.ItemId
 import com.example.recipedeck.domain.item.ItemRepository
 import com.example.recipedeck.domain.item.ItemRepositoryFailure
 
-class RenameItemUseCase(
-    private val itemRepository: ItemRepository,
-) {
-    suspend operator fun invoke(itemId: ItemId, displayName: String): RenameItemResult {
+fun interface RenameItemUseCase {
+    suspend operator fun invoke(itemId: ItemId, displayName: String): RenameItemResult
+}
+
+fun RenameItemUseCase(
+    itemRepository: ItemRepository,
+): RenameItemUseCase = object : RenameItemUseCase {
+    override suspend fun invoke(itemId: ItemId, displayName: String): RenameItemResult {
         val newDisplayName = NotBlankString.of(displayName) ?: return RenameItemResult.DisplayNameRequired
 
         val item = when (val found = itemRepository.findById(itemId)) {

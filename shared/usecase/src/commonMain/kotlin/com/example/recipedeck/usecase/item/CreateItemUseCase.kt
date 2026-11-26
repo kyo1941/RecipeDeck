@@ -7,10 +7,14 @@ import com.example.recipedeck.domain.item.ItemId
 import com.example.recipedeck.domain.item.ItemRepository
 import com.example.recipedeck.domain.item.ItemRepositoryFailure
 
-class CreateItemUseCase(
-    private val itemRepository: ItemRepository,
-) {
-    suspend operator fun invoke(displayName: String): CreateItemResult {
+fun interface CreateItemUseCase {
+    suspend operator fun invoke(displayName: String): CreateItemResult
+}
+
+fun CreateItemUseCase(
+    itemRepository: ItemRepository,
+): CreateItemUseCase = object : CreateItemUseCase {
+    override suspend fun invoke(displayName: String): CreateItemResult {
         val itemDisplayName = NotBlankString.of(displayName) ?: return CreateItemResult.DisplayNameRequired
 
         when (val found = itemRepository.findByDisplayName(itemDisplayName)) {

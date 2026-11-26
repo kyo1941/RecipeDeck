@@ -16,9 +16,9 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class ShowRecipeListUseCaseTest {
+class ObserveRecipeListUseCaseTest {
     private val recipeRepository = FakeRecipeRepository()
-    private val showRecipeList = ShowRecipeListUseCase(recipeRepository)
+    private val observeRecipeList = ObserveRecipeListUseCase(recipeRepository)
 
     private fun recipe(id: String, name: String) = Recipe(
         id = RecipeId(id),
@@ -35,7 +35,7 @@ class ShowRecipeListUseCaseTest {
         val salad = recipe("recipe-2", "サラダ")
         recipeRepository.savedRecipes += listOf(gingerPork, salad)
 
-        assertEquals(ShowRecipeListResult.Shown(persistentSetOf(gingerPork, salad)), showRecipeList().first())
+        assertEquals(ObserveRecipeListResult.Listed(persistentSetOf(gingerPork, salad)), observeRecipeList().first())
     }
 
     @Test
@@ -43,18 +43,18 @@ class ShowRecipeListUseCaseTest {
         val cause = IllegalStateException("保存先から読み込めない")
         recipeRepository.findFailure = RecipeRepositoryFailure.Unexpected(cause)
 
-        assertEquals(ShowRecipeListResult.Unexpected(cause), showRecipeList().first())
+        assertEquals(ObserveRecipeListResult.Unexpected(cause), observeRecipeList().first())
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun Recipeが保存されると返し直す() = runTest {
-        val results = mutableListOf<ShowRecipeListResult>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { showRecipeList().toList(results) }
+        val results = mutableListOf<ObserveRecipeListResult>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { observeRecipeList().toList(results) }
         val gingerPork = recipe("recipe-1", "生姜焼き")
 
         recipeRepository.save(gingerPork)
 
-        assertEquals(ShowRecipeListResult.Shown(persistentSetOf(gingerPork)), results.last())
+        assertEquals(ObserveRecipeListResult.Listed(persistentSetOf(gingerPork)), results.last())
     }
 }

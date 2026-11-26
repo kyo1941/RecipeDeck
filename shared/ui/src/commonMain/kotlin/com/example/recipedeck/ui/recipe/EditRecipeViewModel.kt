@@ -7,13 +7,13 @@ import co.touchlab.kermit.Logger
 import com.example.recipedeck.domain.amount.AmountUnit
 import com.example.recipedeck.domain.item.Item
 import com.example.recipedeck.domain.recipe.RecipeId
-import com.example.recipedeck.domain.recipe.RecipeStatus
-import com.example.recipedeck.usecase.ingredient.IngredientInput
 import com.example.recipedeck.usecase.item.SearchItemsResult
+import com.example.recipedeck.usecase.item.SearchItemsUseCase
 import com.example.recipedeck.usecase.recipe.EditRecipeResult
-import com.example.recipedeck.usecase.recipe.ShowRecipeResult
+import com.example.recipedeck.usecase.recipe.EditRecipeUseCase
+import com.example.recipedeck.usecase.recipe.ObserveRecipeResult
+import com.example.recipedeck.usecase.recipe.ObserveRecipeUseCase
 import kotlinx.collections.immutable.persistentListOf
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,9 +25,10 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 
 class EditRecipeViewModel(
-    private val showRecipe: () -> Flow<ShowRecipeResult>,
-    private val editRecipe: suspend (name: String, status: RecipeStatus, memo: String, ingredients: List<IngredientInput>) -> EditRecipeResult,
-    private val searchItems: suspend (keyword: String) -> SearchItemsResult,
+    private val recipeId: RecipeId,
+    private val observeRecipe: ObserveRecipeUseCase,
+    private val editRecipe: EditRecipeUseCase,
+    private val searchItems: SearchItemsUseCase,
     private val leftoverEditKeeper: LeftoverRecipeEditKeeper,
 ) : ViewModel(), RecipeEditorActions {
     private val _uiState = MutableStateFlow<EditRecipeUiState>(EditRecipeUiState.Loading)
@@ -78,7 +79,13 @@ class EditRecipeViewModel(
         _uiState.value = EditRecipeUiState.Editing(saving)
         viewModelScope.launch {
             val form = saving.form
-            when (val result = editRecipe(form.name, form.status, form.memo, form.ingredients.toInputs())) {
+            when (val result = editRecipe(
+                recipeId = recipeId,
+                name = form.name,
+                status = form.status,
+                memo = form.memo,
+                ingredients = form.ingredients.toInputs(),
+            )) {
                 is EditRecipeResult.Saved -> applyOutcome { it.saved() }
                 EditRecipeResult.NameRequired, is EditRecipeResult.IngredientDisplayNameRequired -> updateEditor { it.saveRejected() }
                 // TODO: Recipe の削除を作るときに、入力を新しいレシピとして保存するかを尋ねる動線を足す（spec の未確定事項）。今は入力が失われる。
@@ -100,11 +107,11 @@ class EditRecipeViewModel(
     override fun keepEditing() = updateEditor { it.copy(isConfirmingDiscard = false) }
 
     private suspend fun load() {
-        val next = when (val result = showRecipe().first()) {
-            is ShowRecipeResult.Shown ->
+        val next = when (val result = observeRecipe(recipeId).first()) {
+            is ObserveRecipeResult.Found ->
                 EditRecipeUiState.Editing(RecipeEditorUiState.startingWith(RecipeForm.of(result)).copy(offeredLeftover = leftoverEditKeeper.read()))
-            ShowRecipeResult.RecipeNoLongerExists -> EditRecipeUiState.NoLongerExists
-            is ShowRecipeResult.Unexpected -> EditRecipeUiState.LoadFailed
+            ObserveRecipeResult.RecipeNoLongerExists -> EditRecipeUiState.NoLongerExists
+            is ObserveRecipeResult.Unexpected -> EditRecipeUiState.LoadFailed
                 .also { logger.e(result.cause) { "編集する Recipe を読み込めなかった" } }
         }
         if (_uiState.value != EditRecipeUiState.Loading) return

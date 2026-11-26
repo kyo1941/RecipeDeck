@@ -6,10 +6,10 @@ import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
 import com.example.recipedeck.domain.amount.AmountUnit
 import com.example.recipedeck.domain.item.Item
-import com.example.recipedeck.domain.recipe.RecipeStatus
-import com.example.recipedeck.usecase.ingredient.IngredientInput
 import com.example.recipedeck.usecase.item.SearchItemsResult
+import com.example.recipedeck.usecase.item.SearchItemsUseCase
 import com.example.recipedeck.usecase.recipe.CreateRecipeResult
+import com.example.recipedeck.usecase.recipe.CreateRecipeUseCase
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,8 +21,8 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 
 class CreateRecipeViewModel(
-    private val createRecipe: suspend (name: String, status: RecipeStatus, memo: String, ingredients: List<IngredientInput>) -> CreateRecipeResult,
-    private val searchItems: suspend (keyword: String) -> SearchItemsResult,
+    private val createRecipe: CreateRecipeUseCase,
+    private val searchItems: SearchItemsUseCase,
     private val leftoverEditKeeper: LeftoverRecipeEditKeeper,
     private val resumesLeftover: Boolean,
 ) : ViewModel(), RecipeEditorActions {
@@ -68,7 +68,12 @@ class CreateRecipeViewModel(
         _uiState.value = CreateRecipeUiState.Editing(saving)
         viewModelScope.launch {
             val form = saving.form
-            when (val result = createRecipe(form.name, form.status, form.memo, form.ingredients.toInputs())) {
+            when (val result = createRecipe(
+                name = form.name,
+                status = form.status,
+                memo = form.memo,
+                ingredients = form.ingredients.toInputs(),
+            )) {
                 is CreateRecipeResult.Created -> applyOutcome { it.saved() }
                 CreateRecipeResult.NameRequired, is CreateRecipeResult.IngredientDisplayNameRequired -> updateEditor { it.saveRejected() }
                 is CreateRecipeResult.Unexpected -> {

@@ -7,11 +7,15 @@ import com.example.recipedeck.domain.shopping.SessionItemId
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepository
 import com.example.recipedeck.domain.shopping.ShoppingSessionRepositoryFailure
 
-class MarkShoppingListItemPurchasedUseCase(
-    private val shoppingSessionRepository: ShoppingSessionRepository,
-    private val purchaseRecordRepository: PurchaseRecordRepository,
-) {
-    suspend operator fun invoke(sessionItemId: SessionItemId, isPurchased: Boolean): MarkShoppingListItemPurchasedResult {
+fun interface MarkShoppingListItemPurchasedUseCase {
+    suspend operator fun invoke(sessionItemId: SessionItemId, isPurchased: Boolean): MarkShoppingListItemPurchasedResult
+}
+
+fun MarkShoppingListItemPurchasedUseCase(
+    shoppingSessionRepository: ShoppingSessionRepository,
+    purchaseRecordRepository: PurchaseRecordRepository,
+): MarkShoppingListItemPurchasedUseCase = object : MarkShoppingListItemPurchasedUseCase {
+    override suspend fun invoke(sessionItemId: SessionItemId, isPurchased: Boolean): MarkShoppingListItemPurchasedResult {
         val session = when (val found = shoppingSessionRepository.findActive()) {
             is Outcome.Success -> found.value ?: return MarkShoppingListItemPurchasedResult.NoActiveSession
             is Outcome.Failure -> return found.error.toMarkShoppingListItemPurchasedResult()

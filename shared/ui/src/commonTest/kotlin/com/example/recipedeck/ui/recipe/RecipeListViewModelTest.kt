@@ -4,7 +4,7 @@ import com.example.recipedeck.domain.NotBlankString
 import com.example.recipedeck.domain.recipe.Recipe
 import com.example.recipedeck.domain.recipe.RecipeId
 import com.example.recipedeck.domain.recipe.RecipeStatus
-import com.example.recipedeck.usecase.recipe.ShowRecipeListResult
+import com.example.recipedeck.usecase.recipe.ObserveRecipeListResult
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.Dispatchers
@@ -50,20 +50,20 @@ class RecipeListViewModelTest {
 
     @Test
     fun 最初の結果が届くまでは読み込み中になる() = runTest {
-        val results = MutableSharedFlow<ShowRecipeListResult>()
-        val viewModel = RecipeListViewModel(showRecipeList = { results }, leftoverEdits = FakeLeftoverRecipeEditStore())
+        val results = MutableSharedFlow<ObserveRecipeListResult>()
+        val viewModel = RecipeListViewModel(observeRecipeList = { results }, leftoverEdits = FakeLeftoverRecipeEditStore())
         subscribe(viewModel)
 
         assertEquals(RecipeListUiState.Loading, viewModel.uiState.value)
 
-        results.emit(ShowRecipeListResult.Shown(persistentSetOf()))
+        results.emit(ObserveRecipeListResult.Listed(persistentSetOf()))
 
         assertEquals(RecipeListUiState.NoRecipes, viewModel.uiState.value)
     }
 
     @Test
     fun Recipeが1件もなければそのことを状態にする() = runTest {
-        val viewModel = RecipeListViewModel(showRecipeList = { flowOf(ShowRecipeListResult.Shown(persistentSetOf())) }, leftoverEdits = FakeLeftoverRecipeEditStore())
+        val viewModel = RecipeListViewModel(observeRecipeList = { flowOf(ObserveRecipeListResult.Listed(persistentSetOf())) }, leftoverEdits = FakeLeftoverRecipeEditStore())
         subscribe(viewModel)
 
         assertEquals(RecipeListUiState.NoRecipes, viewModel.uiState.value)
@@ -76,7 +76,7 @@ class RecipeListViewModelTest {
             recipe("recipe-2", "サラダ"),
             recipe("recipe-1", "生姜焼き"),
         )
-        val viewModel = RecipeListViewModel(showRecipeList = { flowOf(ShowRecipeListResult.Shown(recipes)) }, leftoverEdits = FakeLeftoverRecipeEditStore())
+        val viewModel = RecipeListViewModel(observeRecipeList = { flowOf(ObserveRecipeListResult.Listed(recipes)) }, leftoverEdits = FakeLeftoverRecipeEditStore())
         subscribe(viewModel)
 
         val expected = persistentListOf(
@@ -90,7 +90,7 @@ class RecipeListViewModelTest {
     @Test
     fun 下書きのRecipeはそのことを行に持つ() = runTest {
         val recipes = persistentSetOf(recipe("recipe-1", "生姜焼き", RecipeStatus.DRAFT), recipe("recipe-2", "麻婆豆腐"))
-        val viewModel = RecipeListViewModel(showRecipeList = { flowOf(ShowRecipeListResult.Shown(recipes)) }, leftoverEdits = FakeLeftoverRecipeEditStore())
+        val viewModel = RecipeListViewModel(observeRecipeList = { flowOf(ObserveRecipeListResult.Listed(recipes)) }, leftoverEdits = FakeLeftoverRecipeEditStore())
         subscribe(viewModel)
 
         val expected = persistentListOf(
@@ -102,7 +102,7 @@ class RecipeListViewModelTest {
 
     @Test
     fun 読み込みに失敗したらそのことを状態にする() = runTest {
-        val viewModel = RecipeListViewModel(showRecipeList = { flowOf(ShowRecipeListResult.Unexpected(IllegalStateException())) }, leftoverEdits = FakeLeftoverRecipeEditStore())
+        val viewModel = RecipeListViewModel(observeRecipeList = { flowOf(ObserveRecipeListResult.Unexpected(IllegalStateException())) }, leftoverEdits = FakeLeftoverRecipeEditStore())
         subscribe(viewModel)
 
         assertEquals(RecipeListUiState.LoadFailed, viewModel.uiState.value)
@@ -110,17 +110,17 @@ class RecipeListViewModelTest {
 
     @Test
     fun 結果が届き直すたびに状態を置き換える() = runTest {
-        val results = MutableSharedFlow<ShowRecipeListResult>()
-        val viewModel = RecipeListViewModel(showRecipeList = { results }, leftoverEdits = FakeLeftoverRecipeEditStore())
+        val results = MutableSharedFlow<ObserveRecipeListResult>()
+        val viewModel = RecipeListViewModel(observeRecipeList = { results }, leftoverEdits = FakeLeftoverRecipeEditStore())
         subscribe(viewModel)
 
-        results.emit(ShowRecipeListResult.Shown(persistentSetOf(recipe("recipe-1", "生姜焼き"))))
+        results.emit(ObserveRecipeListResult.Listed(persistentSetOf(recipe("recipe-1", "生姜焼き"))))
         assertEquals(RecipeListUiState.Shown(persistentListOf(RecipeListItem(RecipeId("recipe-1"), "生姜焼き", isDraft = false))), viewModel.uiState.value)
 
-        results.emit(ShowRecipeListResult.Unexpected(IllegalStateException()))
+        results.emit(ObserveRecipeListResult.Unexpected(IllegalStateException()))
         assertEquals(RecipeListUiState.LoadFailed, viewModel.uiState.value)
 
-        results.emit(ShowRecipeListResult.Shown(persistentSetOf()))
+        results.emit(ObserveRecipeListResult.Listed(persistentSetOf()))
         assertEquals(RecipeListUiState.NoRecipes, viewModel.uiState.value)
     }
 
@@ -128,12 +128,12 @@ class RecipeListViewModelTest {
     fun 再試行するとRecipeの一覧を読み直して新しい結果を状態にする() = runTest {
         var calls = 0
         val viewModel = RecipeListViewModel(
-            showRecipeList = {
+            observeRecipeList = {
                 calls++
                 if (calls == 1) {
-                    flowOf(ShowRecipeListResult.Unexpected(IllegalStateException()))
+                    flowOf(ObserveRecipeListResult.Unexpected(IllegalStateException()))
                 } else {
-                    flowOf(ShowRecipeListResult.Shown(persistentSetOf()))
+                    flowOf(ObserveRecipeListResult.Listed(persistentSetOf()))
                 }
             },
             leftoverEdits = FakeLeftoverRecipeEditStore(),
@@ -152,7 +152,7 @@ class RecipeListViewModelTest {
         val leftoverEdits = FakeLeftoverRecipeEditStore(
             LeftoverRecipeEditKey.NewRecipe to LeftoverRecipeEdit(name = "途中", isDraft = false, memo = "", ingredients = emptyList()),
         )
-        val viewModel = RecipeListViewModel(showRecipeList = { flowOf(ShowRecipeListResult.Shown(persistentSetOf())) }, leftoverEdits = leftoverEdits)
+        val viewModel = RecipeListViewModel(observeRecipeList = { flowOf(ObserveRecipeListResult.Listed(persistentSetOf())) }, leftoverEdits = leftoverEdits)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.hasLeftoverNewRecipe.collect {} }
         assertEquals(true, viewModel.hasLeftoverNewRecipe.value)
 

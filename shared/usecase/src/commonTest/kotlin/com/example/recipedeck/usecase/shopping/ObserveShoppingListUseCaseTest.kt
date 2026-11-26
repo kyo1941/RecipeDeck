@@ -18,10 +18,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Instant
 
-class ShowShoppingListUseCaseTest {
+class ObserveShoppingListUseCaseTest {
     private val shoppingSessionRepository = FakeShoppingSessionRepository()
     private val purchaseRecordRepository = FakePurchaseRecordRepository()
-    private val showShoppingList = ShowShoppingListUseCase(shoppingSessionRepository, purchaseRecordRepository)
+    private val observeShoppingList = ObserveShoppingListUseCase(shoppingSessionRepository, purchaseRecordRepository)
 
     private fun sessionWithMapoTofu() = ShoppingSession.create(Instant.parse("2026-10-12T10:00:00Z")).withAddedRecipe(
         sourceRecipeId = RecipeId("recipe-mapo-tofu"),
@@ -34,9 +34,9 @@ class ShowShoppingListUseCaseTest {
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private fun TestScope.collectedResults(): List<ShowShoppingListResult> {
-        val results = mutableListOf<ShowShoppingListResult>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { showShoppingList().toList(results) }
+    private fun TestScope.collectedResults(): List<ObserveShoppingListResult> {
+        val results = mutableListOf<ObserveShoppingListResult>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { observeShoppingList().toList(results) }
         return results
     }
 
@@ -47,14 +47,14 @@ class ShowShoppingListUseCaseTest {
         val purchased = setOf(session.recipes.single().ingredients.first().id)
         purchaseRecordRepository.purchasedSourceIds[session.id] = purchased
 
-        val result = showShoppingList().first()
+        val result = observeShoppingList().first()
 
-        assertEquals(ShowShoppingListResult.Shown(session.toShoppingList(purchased)), result)
+        assertEquals(ObserveShoppingListResult.Listed(session.toShoppingList(purchased)), result)
     }
 
     @Test
     fun 進行中のSessionが無ければそのことを返す() = runTest {
-        assertEquals(ShowShoppingListResult.NoActiveSession, showShoppingList().first())
+        assertEquals(ObserveShoppingListResult.NoActiveSession, observeShoppingList().first())
     }
 
     @Test
@@ -62,7 +62,7 @@ class ShowShoppingListUseCaseTest {
         val cause = IllegalStateException("保存先から読み込めない")
         shoppingSessionRepository.findFailure = ShoppingSessionRepositoryFailure.Unexpected(cause)
 
-        assertEquals(ShowShoppingListResult.Unexpected(cause), showShoppingList().first())
+        assertEquals(ObserveShoppingListResult.Unexpected(cause), observeShoppingList().first())
     }
 
     @Test
@@ -71,7 +71,7 @@ class ShowShoppingListUseCaseTest {
         val cause = IllegalStateException("保存先から読み込めない")
         purchaseRecordRepository.findFailure = PurchaseRecordRepositoryFailure.Unexpected(cause)
 
-        assertEquals(ShowShoppingListResult.Unexpected(cause), showShoppingList().first())
+        assertEquals(ObserveShoppingListResult.Unexpected(cause), observeShoppingList().first())
     }
 
     @Test
@@ -83,7 +83,7 @@ class ShowShoppingListUseCaseTest {
 
         purchaseRecordRepository.record(session.id, setOf(greenOnion), isPurchased = true)
 
-        assertEquals(ShowShoppingListResult.Shown(session.toShoppingList(setOf(greenOnion))), results.last())
+        assertEquals(ObserveShoppingListResult.Listed(session.toShoppingList(setOf(greenOnion))), results.last())
     }
 
     @Test
@@ -100,6 +100,6 @@ class ShowShoppingListUseCaseTest {
 
         shoppingSessionRepository.save(withFriedRice)
 
-        assertEquals(ShowShoppingListResult.Shown(withFriedRice.toShoppingList(emptySet())), results.last())
+        assertEquals(ObserveShoppingListResult.Listed(withFriedRice.toShoppingList(emptySet())), results.last())
     }
 }

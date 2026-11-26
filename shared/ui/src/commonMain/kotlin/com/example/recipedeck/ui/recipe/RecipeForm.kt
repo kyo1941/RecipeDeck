@@ -12,7 +12,7 @@ import com.example.recipedeck.ui.amount.quantityOrNull
 import com.example.recipedeck.ui.amount.editableText
 import com.example.recipedeck.usecase.ingredient.IngredientInput
 import com.example.recipedeck.usecase.ingredient.ItemInput
-import com.example.recipedeck.usecase.recipe.ShowRecipeResult
+import com.example.recipedeck.usecase.recipe.ObserveRecipeResult
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 
@@ -47,11 +47,11 @@ data class RecipeForm(
     companion object {
         fun empty() = RecipeForm(name = "", isDraft = false, memo = "", ingredients = IngredientListForm.of(listOf(IngredientForm.empty())))
 
-        fun of(shown: ShowRecipeResult.Shown) = RecipeForm(
-            name = shown.recipe.name.value,
-            isDraft = shown.recipe.status == RecipeStatus.DRAFT,
-            memo = shown.recipe.memo?.value.orEmpty(),
-            ingredients = IngredientListForm.of(shown.ingredients.map(IngredientForm::of)),
+        fun of(found: ObserveRecipeResult.Found) = RecipeForm(
+            name = found.recipe.name.value,
+            isDraft = found.recipe.status == RecipeStatus.DRAFT,
+            memo = found.recipe.memo?.value.orEmpty(),
+            ingredients = IngredientListForm.of(found.ingredients.map(IngredientForm::of)),
         )
 
         fun of(leftover: LeftoverRecipeEdit) = RecipeForm(
@@ -138,11 +138,11 @@ data class IngredientForm(
 
         fun empty() = IngredientForm(name = "", selectedItemId = null, quantity = TextFieldValue(""), unit = null)
 
-        fun of(shown: ShowRecipeResult.Shown.Ingredient) = IngredientForm(
-            name = shown.item.displayName.value,
-            selectedItemId = shown.item.id,
-            quantity = TextFieldValue(shown.amount?.let { it.quantity.editableText(it.notation) }.orEmpty()),
-            unit = shown.amount?.unit,
+        fun of(found: ObserveRecipeResult.Found.Ingredient) = IngredientForm(
+            name = found.item.displayName.value,
+            selectedItemId = found.item.id,
+            quantity = TextFieldValue(found.amount?.let { it.quantity.editableText(it.notation) }.orEmpty()),
+            unit = found.amount?.unit,
         )
 
         fun of(leftover: LeftoverRecipeEdit.Ingredient) = IngredientForm(

@@ -32,12 +32,12 @@ import com.example.recipedeck.usecase.item.RenameItemUseCase
 import com.example.recipedeck.usecase.item.SearchItemsUseCase
 import com.example.recipedeck.usecase.recipe.CreateRecipeUseCase
 import com.example.recipedeck.usecase.recipe.EditRecipeUseCase
-import com.example.recipedeck.usecase.recipe.ShowRecipeListUseCase
-import com.example.recipedeck.usecase.recipe.ShowRecipeUseCase
+import com.example.recipedeck.usecase.recipe.ObserveRecipeListUseCase
+import com.example.recipedeck.usecase.recipe.ObserveRecipeUseCase
 import com.example.recipedeck.usecase.shopping.AddRecipeToShoppingSessionUseCase
 import com.example.recipedeck.usecase.shopping.FindSessionDuplicateCandidatesUseCase
 import com.example.recipedeck.usecase.shopping.MarkShoppingListItemPurchasedUseCase
-import com.example.recipedeck.usecase.shopping.ShowShoppingListUseCase
+import com.example.recipedeck.usecase.shopping.ObserveShoppingListUseCase
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.Provides
@@ -52,10 +52,10 @@ interface AppGraph : ScreenViewModels {
     val renameItemUseCase: RenameItemUseCase
     val createRecipeUseCase: CreateRecipeUseCase
     val editRecipeUseCase: EditRecipeUseCase
-    val showRecipeListUseCase: ShowRecipeListUseCase
+    val observeRecipeListUseCase: ObserveRecipeListUseCase
     val addRecipeToShoppingSessionUseCase: AddRecipeToShoppingSessionUseCase
     val findSessionDuplicateCandidatesUseCase: FindSessionDuplicateCandidatesUseCase
-    val showShoppingListUseCase: ShowShoppingListUseCase
+    val observeShoppingListUseCase: ObserveShoppingListUseCase
     val markShoppingListItemPurchasedUseCase: MarkShoppingListItemPurchasedUseCase
 
     @DependencyGraph.Factory
@@ -144,10 +144,10 @@ interface AppGraph : ScreenViewModels {
     ): FindSessionDuplicateCandidatesUseCase = FindSessionDuplicateCandidatesUseCase(duplicateCandidateFinder)
 
     @Provides
-    fun provideShowShoppingListUseCase(
+    fun provideObserveShoppingListUseCase(
         shoppingSessionRepository: ShoppingSessionRepository,
         purchaseRecordRepository: PurchaseRecordRepository,
-    ): ShowShoppingListUseCase = ShowShoppingListUseCase(shoppingSessionRepository, purchaseRecordRepository)
+    ): ObserveShoppingListUseCase = ObserveShoppingListUseCase(shoppingSessionRepository, purchaseRecordRepository)
 
     @Provides
     fun provideMarkShoppingListItemPurchasedUseCase(
@@ -156,16 +156,16 @@ interface AppGraph : ScreenViewModels {
     ): MarkShoppingListItemPurchasedUseCase = MarkShoppingListItemPurchasedUseCase(shoppingSessionRepository, purchaseRecordRepository)
 
     @Provides
-    fun provideShowRecipeListUseCase(recipeRepository: RecipeRepository): ShowRecipeListUseCase =
-        ShowRecipeListUseCase(recipeRepository)
+    fun provideObserveRecipeListUseCase(recipeRepository: RecipeRepository): ObserveRecipeListUseCase =
+        ObserveRecipeListUseCase(recipeRepository)
 
     @Provides
-    fun provideShowRecipeUseCase(recipeRepository: RecipeRepository, itemRepository: ItemRepository): ShowRecipeUseCase =
-        ShowRecipeUseCase(recipeRepository, itemRepository)
+    fun provideObserveRecipeUseCase(recipeRepository: RecipeRepository, itemRepository: ItemRepository): ObserveRecipeUseCase =
+        ObserveRecipeUseCase(recipeRepository, itemRepository)
 
     @Provides
-    fun provideRecipeViewModelFactory(showRecipeUseCase: ShowRecipeUseCase): RecipeViewModelFactory =
-        RecipeViewModelFactory { recipeId -> RecipeViewModel(showRecipe = { showRecipeUseCase(recipeId) }) }
+    fun provideRecipeViewModelFactory(observeRecipeUseCase: ObserveRecipeUseCase): RecipeViewModelFactory =
+        RecipeViewModelFactory { recipeId -> RecipeViewModel(recipeId = recipeId, observeRecipe = observeRecipeUseCase) }
 
     @Provides
     fun provideCreateRecipeViewModelFactory(
@@ -174,8 +174,8 @@ interface AppGraph : ScreenViewModels {
         leftoverRecipeEditStore: LeftoverRecipeEditStore,
     ): CreateRecipeViewModelFactory = CreateRecipeViewModelFactory { resumesLeftover ->
         CreateRecipeViewModel(
-            createRecipe = createRecipeUseCase::invoke,
-            searchItems = searchItemsUseCase::invoke,
+            createRecipe = createRecipeUseCase,
+            searchItems = searchItemsUseCase,
             leftoverEditKeeper = LeftoverRecipeEditKeeper(leftoverRecipeEditStore, LeftoverRecipeEditKey.NewRecipe),
             resumesLeftover = resumesLeftover,
         )
@@ -183,29 +183,30 @@ interface AppGraph : ScreenViewModels {
 
     @Provides
     fun provideEditRecipeViewModelFactory(
-        showRecipeUseCase: ShowRecipeUseCase,
+        observeRecipeUseCase: ObserveRecipeUseCase,
         editRecipeUseCase: EditRecipeUseCase,
         searchItemsUseCase: SearchItemsUseCase,
         leftoverRecipeEditStore: LeftoverRecipeEditStore,
     ): EditRecipeViewModelFactory = EditRecipeViewModelFactory { recipeId ->
         EditRecipeViewModel(
-            showRecipe = { showRecipeUseCase(recipeId) },
-            editRecipe = { name, status, memo, ingredients -> editRecipeUseCase(recipeId, name, status, memo, ingredients) },
-            searchItems = searchItemsUseCase::invoke,
+            recipeId = recipeId,
+            observeRecipe = observeRecipeUseCase,
+            editRecipe = editRecipeUseCase,
+            searchItems = searchItemsUseCase,
             leftoverEditKeeper = LeftoverRecipeEditKeeper(leftoverRecipeEditStore, LeftoverRecipeEditKey.OfRecipe(recipeId)),
         )
     }
 
     @Provides
     fun provideRecipeListViewModel(
-        showRecipeListUseCase: ShowRecipeListUseCase,
+        observeRecipeListUseCase: ObserveRecipeListUseCase,
         leftoverRecipeEditStore: LeftoverRecipeEditStore,
     ): RecipeListViewModel = RecipeListViewModel(
-        showRecipeList = showRecipeListUseCase::invoke,
+        observeRecipeList = observeRecipeListUseCase,
         leftoverEdits = leftoverRecipeEditStore,
     )
 
     @Provides
-    fun provideShoppingListViewModel(showShoppingListUseCase: ShowShoppingListUseCase): ShoppingListViewModel =
-        ShoppingListViewModel(showShoppingList = showShoppingListUseCase::invoke)
+    fun provideShoppingListViewModel(observeShoppingListUseCase: ObserveShoppingListUseCase): ShoppingListViewModel =
+        ShoppingListViewModel(observeShoppingList = observeShoppingListUseCase)
 }
