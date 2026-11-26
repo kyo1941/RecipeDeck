@@ -412,7 +412,7 @@ private fun CreateRecipeScreenRequiredPreview() {
     val form = RecipeForm.empty().copy(
         ingredients = IngredientListForm.of(listOf(IngredientForm.empty().copy(quantity = TextFieldValue("1/2")))),
     )
-    val rejected = previewEditor(form).saveRequested()?.saveRejected() ?: return
+    val rejected = checkNotNull(previewEditor(form).saveRequested()?.saveRejected()) { "保存中でなければ、保存を始められるはず" }
     ScreenPreview {
         CreateRecipeScreen(CreateRecipeUiState.Editing(rejected), PreviewRecipeEditorActions)
     }
@@ -422,7 +422,7 @@ private fun CreateRecipeScreenRequiredPreview() {
 @Composable
 private fun CreateRecipeScreenItemCandidatesPreview() {
     val typing = previewEditor(RecipeForm.empty().copy(name = "生姜焼き")).withIngredientNameChanged(key = 0, name = "豚")
-    val query = typing.itemQuery ?: return
+    val query = checkNotNull(typing.itemQuery) { "材料の名前を打ったら、候補を探すはず" }
     val items = listOf("豚こま肉", "豚バラ肉", "豚ひき肉").mapIndexedNotNull { index, name ->
         NotBlankString.of(name)?.let { Item(ItemId("item-$index"), it) }
     }
@@ -444,7 +444,7 @@ private fun CreateRecipeScreenLeftoverPreview() {
 @Preview
 @Composable
 private fun CreateRecipeScreenSaveFailedPreview() {
-    val failed = previewEditor(RecipeForm.empty().copy(name = "生姜焼き")).saveRequested()?.saveFailed() ?: return
+    val failed = checkNotNull(previewEditor(RecipeForm.empty().copy(name = "生姜焼き")).saveRequested()?.saveFailed()) { "保存中でなければ、保存を始められるはず" }
     ScreenPreview {
         CreateRecipeScreen(CreateRecipeUiState.Editing(failed), PreviewRecipeEditorActions)
     }
@@ -454,7 +454,7 @@ private fun CreateRecipeScreenSaveFailedPreview() {
 @Composable
 private fun CreateRecipeScreenConfirmingDiscardPreview() {
     val editor = previewEditor(RecipeForm.empty()).withFormChanged { it.copy(name = "生姜焼き") }
-    val confirming = (editor.closeRequested() as? RecipeEditorOutcome.Continue)?.editor ?: return
+    val confirming = checkNotNull((editor.closeRequested() as? RecipeEditorOutcome.Continue)?.editor) { "変更があるときは、閉じる前に確認するはず" }
     ScreenPreview {
         CreateRecipeScreen(CreateRecipeUiState.Editing(confirming), PreviewRecipeEditorActions)
     }
