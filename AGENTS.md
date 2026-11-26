@@ -30,3 +30,7 @@ Android の端末テストはエミュレータか実機が要るので、PR の
 ```sh
 ./gradlew :shared:data:connectedAndroidDeviceTest
 ```
+
+PR を作る前に、この節のコマンドをすべて流す。 
+画面を変えた PR には、両 OS のスクリーンショットと一連の操作の動画を貼る。
+画像と動画は `gh pr create --attach ./file.png`（後から足すなら `gh pr comment --attach`）で上げられる。本文の `![説明](./file.png)` は、上げた先に書き換わる。
