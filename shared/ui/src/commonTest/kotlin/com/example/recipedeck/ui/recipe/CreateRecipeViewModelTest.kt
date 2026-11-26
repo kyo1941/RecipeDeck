@@ -645,4 +645,19 @@ class CreateRecipeViewModelTest {
 
         assertNull(storedLeftover)
     }
+
+    @Test
+    fun 残った編集を消せなかった後に閉じるともう一度消す() = runTest {
+        leftoverEdits.save(LeftoverRecipeEditKey.NewRecipe, leftover)
+        val viewModel = viewModel()
+        leftoverEdits.failsWrites = true
+        viewModel.discardLeftover()
+        advanceTimeBy(1_001)
+        assertEquals(leftover, storedLeftover)
+
+        leftoverEdits.failsWrites = false
+        viewModel.requestClose()
+
+        assertNull(storedLeftover)
+    }
 }

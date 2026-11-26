@@ -43,19 +43,20 @@ class DataStoreLeftoverRecipeEditStore(filePath: String) : LeftoverRecipeEditSto
         .map { it.edits[key.storedName] }
         .distinctUntilChanged()
 
-    override suspend fun save(key: LeftoverRecipeEditKey, edit: LeftoverRecipeEdit) =
+    override suspend fun save(key: LeftoverRecipeEditKey, edit: LeftoverRecipeEdit): Boolean =
         update { it.copy(edits = it.edits + (key.storedName to edit)) }
 
-    override suspend fun delete(key: LeftoverRecipeEditKey) =
+    override suspend fun delete(key: LeftoverRecipeEditKey): Boolean =
         update { it.copy(edits = it.edits - key.storedName) }
 
-    private suspend fun update(transform: (LeftoverRecipeEdits) -> LeftoverRecipeEdits) {
+    private suspend fun update(transform: (LeftoverRecipeEdits) -> LeftoverRecipeEdits): Boolean =
         try {
             dataStore.updateData(transform)
+            true
         } catch (cause: IOException) {
             logger.e(cause) { "残った編集を書けなかった" }
+            false
         }
-    }
 
     private companion object {
         val logger = Logger.withTag("DataStoreLeftoverRecipeEditStore")

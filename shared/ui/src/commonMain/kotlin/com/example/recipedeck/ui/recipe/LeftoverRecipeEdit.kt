@@ -38,12 +38,13 @@ sealed interface LeftoverRecipeEditKey {
 }
 
 /**
- * 読み書きに失敗しても、編集と保存は続けられる。失敗はログに残し、残った編集がないものとして扱う。
+ * 読み書きに失敗しても、編集と保存は続けられる。失敗はログに残し、読めなければ残った編集がないものとして扱う。
+ * 書けたかどうかは返す。書けなかった後は保存先の中身が分からないので、使う側は次の書き込みを飛ばさずに行う。
  */
 interface LeftoverRecipeEditStore {
     fun leftoverEdit(key: LeftoverRecipeEditKey): Flow<LeftoverRecipeEdit?>
-    suspend fun save(key: LeftoverRecipeEditKey, edit: LeftoverRecipeEdit)
-    suspend fun delete(key: LeftoverRecipeEditKey)
+    suspend fun save(key: LeftoverRecipeEditKey, edit: LeftoverRecipeEdit): Boolean
+    suspend fun delete(key: LeftoverRecipeEditKey): Boolean
 }
 
 class LeftoverRecipeEditKeeper(
@@ -80,8 +81,8 @@ class LeftoverRecipeEditKeeper(
         // 書いている途中で取り消されても、保存先は書き終わっていることがある（DataStore は受け付けた更新を最後まで行う）。
         // 終わったときの書き込みを「同じ値」と見て飛ばさないよう、書き終えるまでは分からないものとして扱う。
         stored = null
-        if (leftover == null) store.delete(key) else store.save(key, leftover.toLeftoverEdit())
-        stored = Stored(leftover)
+        val isWritten = if (leftover == null) store.delete(key) else store.save(key, leftover.toLeftoverEdit())
+        if (isWritten) stored = Stored(leftover)
     }
 
     private fun RecipeForm?.hasSameContentAs(other: RecipeForm?): Boolean =

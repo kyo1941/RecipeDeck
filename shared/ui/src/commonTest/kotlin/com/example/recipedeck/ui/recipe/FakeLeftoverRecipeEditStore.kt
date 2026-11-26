@@ -13,17 +13,22 @@ class FakeLeftoverRecipeEditStore(vararg initial: Pair<LeftoverRecipeEditKey, Le
 
     // DataStore と同じく、書いた後に呼び出し側へ戻るのを待たせる。待っている間に取り消されても、書いた値は残る。
     var afterWrite: CompletableDeferred<Unit>? = null
+    var failsWrites = false
 
     override fun leftoverEdit(key: LeftoverRecipeEditKey): Flow<LeftoverRecipeEdit?> = edits.map { it[key] }
 
-    override suspend fun save(key: LeftoverRecipeEditKey, edit: LeftoverRecipeEdit) {
+    override suspend fun save(key: LeftoverRecipeEditKey, edit: LeftoverRecipeEdit): Boolean {
         writes++
+        if (failsWrites) return false
         edits.update { it + (key to edit) }
         afterWrite?.await()
+        return true
     }
 
-    override suspend fun delete(key: LeftoverRecipeEditKey) {
+    override suspend fun delete(key: LeftoverRecipeEditKey): Boolean {
         writes++
+        if (failsWrites) return false
         edits.update { it - key }
+        return true
     }
 }
