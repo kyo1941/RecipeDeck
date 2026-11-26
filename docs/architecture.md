@@ -67,7 +67,7 @@ Android の minSdk は 24 で、Compose Multiplatform の最低（API 21）を�
 - ID は文字列をラップする値クラス（value class）とする。内部には UUID 形式の文字列を格納する取り決めとし、型自体ではフォーマットの検証を行わない。新しい ID は ID の型の `generate()` で作り、UUID を作る処理は domain の1か所（`generateIdValue`）にまとめる
 - 集約が保持するコレクションは kotlinx-collections-immutable の `ImmutableList` で受け取る。外部から渡されたリストが後から変更され、不変条件が崩れるのを防ぐためである
 - 日時には `kotlin.time.Instant` を使用する。現在時刻は UseCase 側から引数で渡し、ドメイン層内部では時刻取得を行わない
-- 有無だけを表すものは nullable、それ以上の意味を持つ状態は enum か sealed interface で表す。ケースごとに持つ値が異なる場合は sealed interface にする
+- 有無だけを表すものは nullable、それ以上の意味を持つ状態は enum か sealed interface で表す。ケースごとに持つ値が異なる場合は sealed interface にする。どのケースも値を持たないなら、どちらでもよい
 - ドメインのテストは、ドメインのルールを素直に確かめるものにとどめ、他層の責務をドメインのテストで検証しない
 
 ## ドメイン構造

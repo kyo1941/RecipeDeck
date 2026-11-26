@@ -47,6 +47,6 @@
 ## 失敗と型
 
 - ドメインの型や UseCase の境界では、想定内の不正な入力・状態を例外ではなく、生成関数（`of` / `ofOrNull` など）の `null` か、結果の `sealed interface` で返す（[ドメイン層の方針](architecture.md#ドメイン層の方針)）
-- 有無だけを表すものは nullable、それ以上の意味を持つ状態は `enum` か `sealed interface` にする（ケースごとに持つ値が異なる場合は `sealed interface` にする）（[ドメイン層の方針](architecture.md#ドメイン層の方針)）
+- 有無だけを表すものは nullable、それ以上の意味を持つ状態は `enum` か `sealed interface` にする（ケースごとに持つ値が異なる場合は `sealed interface` にする。どのケースも値を持たないなら、どちらでもよい）（[ドメイン層の方針](architecture.md#ドメイン層の方針)）
 - 失敗の型を変換する `when`（および `sealed` / `enum` の分岐）では、`else` を使わない。種類が増えたときにコンパイルエラーで気づくため（[UseCase の方針](architecture.md#usecase-の方針)）
 - コルーチンの `CancellationException` は、どの層でも失敗型に変換したり握りつぶしたりせず、そのまま再送出する（[UseCase の方針](architecture.md#usecase-の方針)・[データ層の方針](architecture.md#データ層の方針)）
