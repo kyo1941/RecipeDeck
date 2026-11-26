@@ -79,6 +79,21 @@ class RecipeViewModelTest {
     }
 
     @Test
+    fun 開いたRecipeのIDで読む() = runTest {
+        var observedRecipeId: RecipeId? = null
+        val viewModel = RecipeViewModel(
+            recipeId = RecipeId("recipe-1"),
+            observeRecipe = { recipeId ->
+                observedRecipeId = recipeId
+                flowOf(shown())
+            },
+        )
+        subscribe(viewModel)
+
+        assertEquals(RecipeId("recipe-1"), observedRecipeId)
+    }
+
+    @Test
     fun 材料を並びのまま表示名と分量にしメモも持つ() = runTest {
         val result = shown(memo = "強火で焼く", ingredients = listOf(ObserveRecipeResult.Found.Ingredient(pork, porkAmount), ObserveRecipeResult.Found.Ingredient(ginger, null)))
         val viewModel = RecipeViewModel(recipeId = RecipeId("recipe-1"), observeRecipe = { flowOf(result) })

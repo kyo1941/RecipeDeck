@@ -122,6 +122,19 @@ class EditRecipeViewModelTest {
     }
 
     @Test
+    fun 開いたRecipeのIDで読む() = runTest {
+        var observedRecipeId: RecipeId? = null
+        viewModel(
+            shown = { recipeId ->
+                observedRecipeId = recipeId
+                flowOf(gingerPork)
+            },
+        )
+
+        assertEquals(gingerPork.recipe.id, observedRecipeId)
+    }
+
+    @Test
     fun 開いたRecipeのIDで保存する() = runTest {
         val viewModel = viewModel()
 
